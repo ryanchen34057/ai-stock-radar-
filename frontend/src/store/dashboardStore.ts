@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, SpecialFilters, InstiFilters } from '../types/stock';
 
 interface DashboardState {
   // Data
@@ -13,6 +13,8 @@ interface DashboardState {
   selectedMA: MAPeriod;
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
+  specialFilters: SpecialFilters;
+  instiFilters: InstiFilters;
   selectedLayers: number[];
   sortBy: SortBy;
   darkMode: boolean;
@@ -25,12 +27,30 @@ interface DashboardState {
   setSelectedMA: (ma: MAPeriod) => void;
   setAlertFilter: (filter: AlertFilter) => void;
   setMAProximityFilter: (f: MAProximityFilter) => void;
+  setSpecialFilters: (f: SpecialFilters) => void;
+  setInstiFilters: (f: InstiFilters) => void;
   toggleLayer: (layer: number) => void;
   clearLayers: () => void;
   setSortBy: (sort: SortBy) => void;
   toggleDarkMode: () => void;
   setSelectedStock: (stock: StockData | null) => void;
 }
+
+const DEFAULT_SPECIAL: SpecialFilters = {
+  maBullishAlignment: false,
+  price20DayHigh: false,
+  aboveWeeklyMA: false,
+  aboveMonthlyMA: false,
+  aboveQuarterlyMA: false,
+  allTimeHigh: false,
+};
+
+const DEFAULT_INSTI: InstiFilters = {
+  foreignNetBuy: false,
+  trustNetBuy: false,
+  marginIncreasing: false,
+  shortDecreasing: false,
+};
 
 export const useDashboardStore = create<DashboardState>((set) => ({
   stocks: [],
@@ -42,6 +62,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectedMA: 60,
   alertFilter: 'all',
   maProximityFilter: { enabled: false, ma: 20, direction: 'above', threshold: 3 },
+  specialFilters: DEFAULT_SPECIAL,
+  instiFilters: DEFAULT_INSTI,
   selectedLayers: [],
   sortBy: 'change_percent',
   darkMode: true,
@@ -54,6 +76,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setSelectedMA: (selectedMA) => set({ selectedMA }),
   setAlertFilter: (alertFilter) => set({ alertFilter }),
   setMAProximityFilter: (maProximityFilter) => set({ maProximityFilter }),
+  setSpecialFilters: (specialFilters) => set({ specialFilters }),
+  setInstiFilters: (instiFilters) => set({ instiFilters }),
   toggleLayer: (layer) =>
     set((s) => ({
       selectedLayers: s.selectedLayers.includes(layer)

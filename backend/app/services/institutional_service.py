@@ -3,9 +3,11 @@ Fetch three-institution (外資/投信/自營商) and margin trading (融資/融
 from TWSE and TPEx public APIs. No API key required.
 """
 import requests
+import urllib3
 import logging
 from datetime import datetime, timedelta
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 logger = logging.getLogger(__name__)
 
 HEADERS = {
@@ -38,21 +40,31 @@ def _last_weekday(date_str: str | None = None) -> str:
 # ── TWSE three-institution ────────────────────────────────────────────────────
 
 def _fetch_twse_institutional(date: str) -> dict:
+    """
+    TWSE T86 response column layout (verified 2026-04):
+      row[4]  外陸資買賣超(不含外資自營商)
+      row[7]  外資自營商買賣超
+      row[10] 投信買賣超
+      row[11] 自營商買賣超合計
+      row[18] 三大法人買賣超總計
+    """
     url = "https://www.twse.com.tw/fund/T86"
     params = {"response": "json", "date": date, "selectType": "ALLBUT0999"}
     try:
-        r = requests.get(url, params=params, headers=HEADERS, timeout=15)
+        r = requests.get(url, params=params, headers=HEADERS, timeout=15, verify=False)
         data = r.json()
         if data.get("stat") != "OK":
             return {}
         result = {}
         for row in data.get("data", []):
             sym = row[0].strip()
+            # Combine 外陸資 + 外資自營商 as "外資"
+            foreign = _parse_int(row[4]) + _parse_int(row[7])
             result[sym] = {
-                "foreign_net": _parse_int(row[4]),   # 外資買賣超
-                "trust_net":   _parse_int(row[7]),   # 投信買賣超
-                "dealer_net":  _parse_int(row[10]),  # 自營商買賣超
-                "total_net":   _parse_int(row[11]),  # 三大法人合計
+                "foreign_net": foreign,
+                "trust_net":   _parse_int(row[10]),
+                "dealer_net":  _parse_int(row[11]),
+                "total_net":   _parse_int(row[18]),
             }
         logger.info(f"TWSE institutional {date}: {len(result)} stocks")
         return result
@@ -64,6 +76,18 @@ def _fetch_twse_institutional(date: str) -> dict:
 # ── TPEx three-institution ────────────────────────────────────────────────────
 
 def _fetch_tpex_institutional(date: str) -> dict:
+    """
+    TPEx column layout (24 cols, verified 2026-04 via 3211 cross-sum check):
+      row[4]  外資及陸資買賣超 (不含外資自營商)
+      row[7]  外資自營商買賣超
+      row[10] 外資及陸資合計買賣超 (含自營商)
+      row[13] 投信買賣超
+      row[16] 自營商(自行買賣)買賣超
+      row[19] 自營商(避險)買賣超
+      row[22] 自營商合計買賣超
+      row[23] 三大法人買賣超合計 (= row[10]+row[13]+row[22])
+    Response: json.tables[0].data  (old code incorrectly read aaData)
+    """
     url = ("https://www.tpex.org.tw/web/stock/3insti/daily_trade/"
            "3itrade_hedge_result.php")
     params = {"l": "zh-tw", "t": "D", "d": _tw_date(date), "se": "EW", "s": "0,asc,0"}
@@ -71,17 +95,20 @@ def _fetch_tpex_institutional(date: str) -> dict:
         r = requests.get(
             url, params=params,
             headers={**HEADERS, "Referer": "https://www.tpex.org.tw"},
-            timeout=15,
+            timeout=15, verify=False,
         )
         data = r.json()
+        # Response now uses tables[0].data instead of aaData
+        rows = (data.get("tables", [{}])[0].get("data")
+                if data.get("tables") else data.get("aaData", []))
         result = {}
-        for row in data.get("aaData", []):
+        for row in rows or []:
             sym = str(row[0]).strip()
             result[sym] = {
-                "foreign_net": _parse_int(row[4]),
-                "trust_net":   _parse_int(row[7]),
-                "dealer_net":  _parse_int(row[10]),
-                "total_net":   _parse_int(row[11]),
+                "foreign_net": _parse_int(row[10]),  # 外資合計
+                "trust_net":   _parse_int(row[13]),  # 投信
+                "dealer_net":  _parse_int(row[22]),  # 自營商合計
+                "total_net":   _parse_int(row[23]),  # 三大法人合計
             }
         logger.info(f"TPEx institutional {date}: {len(result)} stocks")
         return result
@@ -96,12 +123,15 @@ def _fetch_twse_margin(date: str) -> dict:
     url = "https://www.twse.com.tw/exchangeReport/MI_MARGN"
     params = {"response": "json", "date": date, "selectType": "ALL"}
     try:
-        r = requests.get(url, params=params, headers=HEADERS, timeout=15)
+        r = requests.get(url, params=params, headers=HEADERS, timeout=15, verify=False)
         data = r.json()
         if data.get("stat") != "OK":
             return {}
+        # Per-stock data now lives in tables[1].data (old code read top-level 'data' which is empty)
+        tables = data.get("tables", [])
+        rows = tables[1].get("data", []) if len(tables) > 1 else data.get("data", [])
         result = {}
-        for row in data.get("data", []):
+        for row in rows:
             sym = row[0].strip()
             prev_margin = _parse_int(row[5])
             curr_margin = _parse_int(row[6])
@@ -123,6 +153,13 @@ def _fetch_twse_margin(date: str) -> dict:
 # ── TPEx margin trading ───────────────────────────────────────────────────────
 
 def _fetch_tpex_margin(date: str) -> dict:
+    """
+    TPEx margin column layout (verified 2026-04):
+      row[2]  融資 前日餘額
+      row[6]  融資 今日餘額
+      row[10] 融券 前日餘額
+      row[14] 融券 今日餘額
+    """
     url = ("https://www.tpex.org.tw/web/stock/margin_trading/margin_balance/"
            "margin_bal_result.php")
     params = {"l": "zh-tw", "o": "json", "d": _tw_date(date)}
@@ -130,16 +167,19 @@ def _fetch_tpex_margin(date: str) -> dict:
         r = requests.get(
             url, params=params,
             headers={**HEADERS, "Referer": "https://www.tpex.org.tw"},
-            timeout=15,
+            timeout=15, verify=False,
         )
         data = r.json()
+        # TPEx now uses tables[0].data; old code read aaData (empty)
+        rows = (data.get("tables", [{}])[0].get("data")
+                if data.get("tables") else data.get("aaData", []))
         result = {}
-        for row in data.get("aaData", []):
+        for row in rows or []:
             sym = str(row[0]).strip()
-            prev_margin = _parse_int(row[4])
-            curr_margin = _parse_int(row[7])
-            prev_short  = _parse_int(row[13])
-            curr_short  = _parse_int(row[16])
+            prev_margin = _parse_int(row[2])
+            curr_margin = _parse_int(row[6])
+            prev_short  = _parse_int(row[10])
+            curr_short  = _parse_int(row[14])
             result[sym] = {
                 "margin_balance": curr_margin,
                 "margin_change":  curr_margin - prev_margin,

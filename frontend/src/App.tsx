@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useDashboardStore } from './store/dashboardStore';
 import { Dashboard } from './components/Dashboard';
 import { SupplyChainMap } from './components/SupplyChainMap';
+import { NewsFeed } from './components/NewsFeed';
 
 type Tab = 'dashboard' | 'chain';
 
@@ -32,8 +33,12 @@ export default function App() {
         </span>
       </nav>
 
-      <div className="flex-1 overflow-hidden">
-        {tab === 'dashboard' ? <Dashboard /> : <SupplyChainMap />}
+      <div className="flex-1 overflow-hidden flex">
+        <div className="flex-1 overflow-hidden">
+          {tab === 'dashboard' && <Dashboard />}
+          {tab === 'chain' && <SupplyChainMap />}
+        </div>
+        <NewsFeed />
       </div>
     </div>
   );

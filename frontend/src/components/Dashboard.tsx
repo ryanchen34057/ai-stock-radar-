@@ -6,10 +6,12 @@ import { ControlBar } from './ControlBar';
 import { StatsSummary } from './StatsSummary';
 import { StockGrid } from './StockGrid';
 import { StockDetailModal } from './StockDetailModal';
-
 export function Dashboard() {
-  const { stocks, loading, error, selectedMA, alertFilter, maProximityFilter, selectedLayers, sortBy, selectedStock, setSelectedStock } =
-    useDashboardStore();
+  const {
+    stocks, loading, error,
+    selectedMA, alertFilter, maProximityFilter, specialFilters, instiFilters,
+    selectedLayers, sortBy, selectedStock, setSelectedStock,
+  } = useDashboardStore();
   const { fetchData } = useStockData();
   useKeyboardShortcuts();
 
@@ -55,6 +57,8 @@ export function Dashboard() {
               selectedMA={selectedMA}
               alertFilter={alertFilter}
               maProximityFilter={maProximityFilter}
+              specialFilters={specialFilters}
+              instiFilters={instiFilters}
               selectedLayers={selectedLayers}
               sortBy={sortBy}
             />

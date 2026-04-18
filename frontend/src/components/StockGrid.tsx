@@ -1,30 +1,41 @@
 import { useMemo } from 'react';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, SpecialFilters, InstiFilters } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance } from '../utils/calcMA';
 import { useDashboardStore } from '../store/dashboardStore';
+import { useInstitutional } from '../hooks/useInstitutional';
 
 interface Props {
   stocks: StockData[];
   selectedMA: MAPeriod;
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
+  specialFilters: SpecialFilters;
+  instiFilters: InstiFilters;
   selectedLayers: number[];
   sortBy: SortBy;
 }
 
-export function StockGrid({ stocks, selectedMA, alertFilter, maProximityFilter, selectedLayers, sortBy }: Props) {
+export function StockGrid({
+  stocks, selectedMA, alertFilter, maProximityFilter,
+  specialFilters, instiFilters, selectedLayers, sortBy,
+}: Props) {
   const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
+  const { data: insti } = useInstitutional();
 
   const filtered = useMemo(() => {
     let result = stocks;
 
     // Layer filter
     if (selectedLayers.length > 0) {
-      result = result.filter((s) => selectedLayers.includes(s.layer));
+      result = result.filter((s) =>
+        selectedLayers.some((id) =>
+          s.layer === id || (s.secondary_layers?.includes(id) ?? false)
+        )
+      );
     }
 
-    // Alert filter (quick toggle)
+    // Alert filter (quick toggle — static above/below selectedMA)
     if (alertFilter !== 'all') {
       result = result.filter((s) => {
         const ma = s.ma[String(selectedMA) as keyof typeof s.ma] ?? null;
@@ -47,6 +58,55 @@ export function StockGrid({ stocks, selectedMA, alertFilter, maProximityFilter, 
       });
     }
 
+    // Special filters
+    const sf = specialFilters;
+    if (sf.maBullishAlignment) {
+      result = result.filter((s) => {
+        const { ma } = s;
+        const v5 = ma['5'], v10 = ma['10'], v20 = ma['20'], v60 = ma['60'];
+        return v5 !== null && v10 !== null && v20 !== null && v60 !== null
+          && v5 > v10 && v10 > v20 && v20 > v60;
+      });
+    }
+    if (sf.price20DayHigh) {
+      result = result.filter((s) => s.is_20d_high);
+    }
+    if (sf.aboveWeeklyMA) {
+      result = result.filter((s) =>
+        s.current_price !== null && s.ma['5'] !== null && s.current_price > (s.ma['5'] ?? 0)
+      );
+    }
+    if (sf.aboveMonthlyMA) {
+      result = result.filter((s) =>
+        s.current_price !== null && s.ma['20'] !== null && s.current_price > (s.ma['20'] ?? 0)
+      );
+    }
+    if (sf.aboveQuarterlyMA) {
+      result = result.filter((s) =>
+        s.current_price !== null && s.ma['60'] !== null && s.current_price > (s.ma['60'] ?? 0)
+      );
+    }
+    if (sf.allTimeHigh) {
+      result = result.filter((s) => s.is_all_time_high);
+    }
+
+    // Institutional filters (skip if data not loaded)
+    if (insti) {
+      const inf = instiFilters;
+      if (inf.foreignNetBuy) {
+        result = result.filter((s) => (insti.stocks[s.symbol]?.foreign_net ?? 0) > 0);
+      }
+      if (inf.trustNetBuy) {
+        result = result.filter((s) => (insti.stocks[s.symbol]?.trust_net ?? 0) > 0);
+      }
+      if (inf.marginIncreasing) {
+        result = result.filter((s) => (insti.stocks[s.symbol]?.margin_change ?? 0) > 0);
+      }
+      if (inf.shortDecreasing) {
+        result = result.filter((s) => (insti.stocks[s.symbol]?.short_change ?? 0) < 0);
+      }
+    }
+
     // Sort
     return [...result].sort((a, b) => {
       switch (sortBy) {
@@ -67,7 +127,7 @@ export function StockGrid({ stocks, selectedMA, alertFilter, maProximityFilter, 
           return 0;
       }
     });
-  }, [stocks, selectedMA, alertFilter, maProximityFilter, selectedLayers, sortBy]);
+  }, [stocks, selectedMA, alertFilter, maProximityFilter, specialFilters, instiFilters, selectedLayers, sortBy, insti]);
 
   if (filtered.length === 0) {
     return (
@@ -86,6 +146,7 @@ export function StockGrid({ stocks, selectedMA, alertFilter, maProximityFilter, 
           key={stock.symbol}
           stock={stock}
           selectedMA={selectedMA}
+          insti={insti?.stocks[stock.symbol] ?? null}
           onClick={() => setSelectedStock(stock)}
         />
       ))}

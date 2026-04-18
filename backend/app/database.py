@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from pathlib import Path
 
@@ -23,7 +24,12 @@ def init_schema():
                 layer INTEGER NOT NULL,
                 layer_name TEXT NOT NULL,
                 sub_category TEXT,
-                note TEXT
+                note TEXT,
+                theme TEXT NOT NULL DEFAULT 'A',
+                themes TEXT DEFAULT NULL,
+                industry_role TEXT DEFAULT NULL,
+                secondary_layers TEXT DEFAULT NULL,
+                logo_id TEXT DEFAULT NULL
             );
 
             CREATE TABLE IF NOT EXISTS klines (
@@ -48,6 +54,34 @@ def init_schema():
 
             CREATE INDEX IF NOT EXISTS idx_klines_symbol_date ON klines(symbol, date);
 
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS news_cache (
+                symbol      TEXT PRIMARY KEY,
+                fetched_at  TEXT NOT NULL,
+                mops_json   TEXT NOT NULL DEFAULT '[]',
+                news_json   TEXT NOT NULL DEFAULT '[]'
+            );
+
+            CREATE TABLE IF NOT EXISTS youtube_mentions (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                video_id      TEXT NOT NULL,
+                video_title   TEXT NOT NULL,
+                video_url     TEXT NOT NULL,
+                video_date    DATE NOT NULL,
+                stock_symbol  TEXT NOT NULL,
+                stock_name    TEXT NOT NULL DEFAULT '',
+                summary       TEXT NOT NULL DEFAULT '',
+                timestamp_sec INTEGER NOT NULL DEFAULT 0,
+                sentiment     TEXT NOT NULL DEFAULT 'neutral',
+                UNIQUE(video_id, stock_symbol)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_yt_date ON youtube_mentions(video_date);
+
             CREATE TABLE IF NOT EXISTS institutional_cache (
                 symbol      TEXT,
                 date        TEXT,
@@ -63,5 +97,39 @@ def init_schema():
             );
         """)
         conn.commit()
+
+        # Migrations for existing databases
+        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(youtube_mentions)").fetchall()}
+        if "sentiment" not in existing_cols:
+            conn.execute("ALTER TABLE youtube_mentions ADD COLUMN sentiment TEXT NOT NULL DEFAULT 'neutral'")
+            conn.commit()
+        existing_stock_cols = {row[1] for row in conn.execute("PRAGMA table_info(stocks)").fetchall()}
+        if "theme" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN theme TEXT NOT NULL DEFAULT 'A'")
+            conn.commit()
+        if "themes" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN themes TEXT DEFAULT NULL")
+            conn.commit()
+        if "industry_role" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN industry_role TEXT DEFAULT NULL")
+            conn.commit()
+        if "secondary_layers" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN secondary_layers TEXT DEFAULT NULL")
+            conn.commit()
+        if "logo_id" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN logo_id TEXT DEFAULT NULL")
+            conn.commit()
+    finally:
+        conn.close()
+
+
+def load_settings_to_env():
+    """Load API keys from app_settings table into os.environ (overrides .env values)."""
+    conn = get_connection()
+    try:
+        rows = conn.execute("SELECT key, value FROM app_settings").fetchall()
+        for row in rows:
+            if row["value"]:
+                os.environ[row["key"]] = row["value"]
     finally:
         conn.close()

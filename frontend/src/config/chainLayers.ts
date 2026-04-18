@@ -1,5 +1,6 @@
 export interface ChainLayer {
   id: number;
+  theme: string;
   name: string;
   icon: string;
   technologies: string;   // short description of what this layer makes
@@ -14,7 +15,7 @@ export interface ChainLayer {
  */
 export const CHAIN_LAYERS: ChainLayer[] = [
   {
-    id: 1,
+    id: 1, theme: 'A',
     name: '核心運算晶片層',
     icon: '🧠',
     technologies: 'GPU代工 · ASIC設計 · HBM記憶體 · CoWoS先進封裝 · BMC',
@@ -31,6 +32,7 @@ export const CHAIN_LAYERS: ChainLayer[] = [
       '2454', // 聯發科   IC設計
       '5274', // 信驊     BMC/伺服器IC
       '6531', // 愛普     記憶體IC
+      '2486', // 一詮     CoWoS均熱片
       // Memory
       '2408', // 南亞科   DRAM
       '2344', // 華邦電   DRAM+NOR
@@ -41,7 +43,7 @@ export const CHAIN_LAYERS: ChainLayer[] = [
     ],
   },
   {
-    id: 2,
+    id: 2, theme: 'A',
     name: 'PCB 與載板層',
     icon: '🔌',
     technologies: 'ABF載板 · 伺服器主板 · CCL銅箔基板 · T-Glass玻纖布 · PCB耗材',
@@ -73,7 +75,7 @@ export const CHAIN_LAYERS: ChainLayer[] = [
     ],
   },
   {
-    id: 3,
+    id: 3, theme: 'A',
     name: '散熱與電源層',
     icon: '❄️',
     technologies: '液冷 Cold Plate · CDU · 快接頭 QDC · BBU備援電池 · HVDC電源',
@@ -93,7 +95,7 @@ export const CHAIN_LAYERS: ChainLayer[] = [
     ],
   },
   {
-    id: 4,
+    id: 4, theme: 'A',
     name: '光通訊與 CPO 層',
     icon: '💡',
     technologies: '矽光子 · 光引擎封裝 · 800G/1.6T光模組 · 網通交換器 · InP磊晶',
@@ -108,13 +110,15 @@ export const CHAIN_LAYERS: ChainLayer[] = [
       '3081', // 聯亞     InP+PAM4
       '3163', // 波若威   光被動元件
       '6451', // 訊芯-KY  光引擎封裝
+      '3363', // 上詮     FAU光纖陣列
+      '4991', // 環宇-KY  InP晶片代工 (AAOI)
       '3105', // 穩懋     GaAs/InP代工
       '2455', // 全新     InP磊晶
       '8086', // 宏捷科   GaAs代工
     ],
   },
   {
-    id: 5,
+    id: 5, theme: 'A',
     name: '被動元件與連接器層',
     icon: '🔩',
     technologies: 'MLCC · 電感 · 高速連接器 · DAC/ACC銅纜 · 化合物半導體',
@@ -128,7 +132,7 @@ export const CHAIN_LAYERS: ChainLayer[] = [
     ],
   },
   {
-    id: 6,
+    id: 6, theme: 'A',
     name: '伺服器 ODM 組裝層',
     icon: '🖥️',
     technologies: '主機板 · L10/L11機櫃組裝 · GPU伺服器 · ASIC伺服器 · 機殼',
@@ -146,7 +150,7 @@ export const CHAIN_LAYERS: ChainLayer[] = [
     ],
   },
   {
-    id: 7,
+    id: 7, theme: 'A',
     name: '電力基礎建設層',
     icon: '⚡',
     technologies: '大型變壓器 · GIS開關設備 · 重電 · AI資料中心電網',
@@ -158,5 +162,86 @@ export const CHAIN_LAYERS: ChainLayer[] = [
       '1503', // 士電     綜合重電
       '1514', // 亞力     重電
     ],
+  },
+  {
+    id: 11, theme: 'B',
+    name: '電池材料層',
+    icon: '🔋',
+    technologies: '正極材料 · 電解液 · 電池化學品',
+    color: '#4CAF50',
+    bgColor: 'rgba(76,175,80,0.08)',
+    symbols: ['4721','4739','6509'],
+  },
+  {
+    id: 12, theme: 'B',
+    name: '三電傳動層',
+    icon: '⚙️',
+    technologies: '電動車齒輪箱 · 傳動精密件 · 整車組裝',
+    color: '#8BC34A',
+    bgColor: 'rgba(139,195,74,0.08)',
+    symbols: ['1536','2351','2201'],
+  },
+  {
+    id: 13, theme: 'B',
+    name: '車用線束層',
+    icon: '🔗',
+    technologies: 'EV高壓線束 · 車用連接器 · 線束系統',
+    color: '#CDDC39',
+    bgColor: 'rgba(205,220,57,0.08)',
+    symbols: ['3665','3023','3003'],
+  },
+  {
+    id: 14, theme: 'B',
+    name: '車燈光學層',
+    icon: '💡',
+    technologies: '車用感測器 · 環景系統 · ADAS光學',
+    color: '#FFC107',
+    bgColor: 'rgba(255,193,7,0.08)',
+    symbols: ['3552'],
+  },
+  {
+    id: 15, theme: 'B',
+    name: '充電基建層',
+    icon: '⚡',
+    technologies: 'EV充電樁 · 車載充電器OBC · 充電模組',
+    color: '#FF9800',
+    bgColor: 'rgba(255,152,0,0.08)',
+    symbols: ['2457','6235','2308'],
+  },
+  {
+    id: 21, theme: 'C',
+    name: '減速機傳動層',
+    icon: '⚙️',
+    technologies: '諧波減速機 · 滾珠螺桿 · 線性模組',
+    color: '#00BCD4',
+    bgColor: 'rgba(0,188,212,0.08)',
+    symbols: ['2049','1597'],
+  },
+  {
+    id: 22, theme: 'C',
+    name: '伺服馬達層',
+    icon: '🔄',
+    technologies: '工業伺服馬達 · 精密滾珠螺桿 · 關節驅動',
+    color: '#3F51B5',
+    bgColor: 'rgba(63,81,181,0.08)',
+    symbols: ['1504','4540'],
+  },
+  {
+    id: 23, theme: 'C',
+    name: '機電整合層',
+    icon: '🤖',
+    technologies: '協作機器人 · 工業視覺 · 系統整合',
+    color: '#9C27B0',
+    bgColor: 'rgba(156,39,176,0.08)',
+    symbols: ['2359','6188'],
+  },
+  {
+    id: 24, theme: 'C',
+    name: '感測末端層',
+    icon: '👁️',
+    technologies: '光學感測IC · 工業鏡頭 · 機器人視覺',
+    color: '#E91E63',
+    bgColor: 'rgba(233,30,99,0.08)',
+    symbols: ['3227','3019'],
   },
 ];

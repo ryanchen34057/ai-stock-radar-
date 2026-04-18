@@ -22,7 +22,7 @@ function NetBadge({ value, label }: { value: number; label: string }) {
   const positive = value > 0;
   return (
     <span className={`inline-flex items-center gap-0.5 text-xs font-mono px-1.5 py-0.5 rounded
-      ${positive ? 'bg-tw-down/10 text-tw-down' : 'bg-tw-up/10 text-tw-up'}`}>
+      ${positive ? 'bg-tw-up/10 text-tw-up' : 'bg-tw-down/10 text-tw-down'}`}>
       <span className="text-text-t">{label}</span>
       {positive ? '▲' : '▼'} {fmtNet(value)}
     </span>
@@ -37,12 +37,14 @@ function LayerCard({
   agg,
   loading,
   onClick,
+  isLast,
 }: {
   layer: ChainLayer;
   selected: boolean;
   agg: InstitutionalStock | null;
   loading: boolean;
   onClick: () => void;
+  isLast: boolean;
 }) {
   return (
     <div className="flex flex-col items-center">
@@ -87,7 +89,7 @@ function LayerCard({
       </button>
 
       {/* Connector arrow (except after last) */}
-      {layer.id < CHAIN_LAYERS.length && (
+      {!isLast && (
         <div className="flex flex-col items-center my-0.5 text-text-t">
           <div className="w-px h-3 bg-border-c" />
           <span className="text-xs">↓</span>
@@ -115,7 +117,7 @@ function LayerStats({ agg, date }: { agg: InstitutionalStock; date: string }) {
         <div key={s.label} className="min-w-[90px]">
           <div className="text-xs text-text-s mb-0.5">{s.label}</div>
           <div className={`text-sm font-mono font-bold tabular-nums
-            ${s.value > 0 ? 'text-tw-down' : s.value < 0 ? 'text-tw-up' : 'text-text-t'}`}>
+            ${s.value > 0 ? 'text-tw-up' : s.value < 0 ? 'text-tw-down' : 'text-text-t'}`}>
             {s.value === 0 ? '--' : `${s.value > 0 ? '+' : ''}${s.value.toLocaleString('zh-TW')} ${s.unit}`}
           </div>
         </div>
@@ -130,11 +132,13 @@ function LayerStats({ agg, date }: { agg: InstitutionalStock; date: string }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function SupplyChainMap() {
+  const [selectedTheme, setSelectedTheme] = useState<'A'|'B'|'C'>('A');
   const [selectedLayerId, setSelectedLayerId] = useState<number>(1);
   const [modalStock, setModalStock] = useState<StockData | null>(null);
   const { stocks, selectedMA } = useDashboardStore();
   const { data: insti, loading: instiLoading } = useInstitutional();
 
+  const themeLayers = CHAIN_LAYERS.filter(l => l.theme === selectedTheme);
   const selectedLayer = CHAIN_LAYERS.find((l) => l.id === selectedLayerId)!;
 
   // Map symbols → StockData
@@ -164,9 +168,20 @@ export function SupplyChainMap() {
       {/* ── Left panel: hierarchy ── */}
       <div className="w-72 flex-shrink-0 border-r border-border-c overflow-y-auto p-3">
         <h2 className="text-xs font-semibold text-text-s uppercase tracking-widest mb-3 px-1">
-          AI 伺服器供應鏈
+          {selectedTheme==='A'?'AI 伺服器供應鏈':selectedTheme==='B'?'電動車供應鏈':'機器人供應鏈'}
         </h2>
-        {CHAIN_LAYERS.map((layer) => (
+        <div className="flex gap-1 mb-3">
+          {(['A','B','C'] as const).map((t) => (
+            <button key={t}
+              onClick={() => { setSelectedTheme(t); setSelectedLayerId(CHAIN_LAYERS.find(l=>l.theme===t)!.id); }}
+              className={`flex-1 text-xs py-1 rounded font-semibold transition-colors
+                ${selectedTheme===t ? 'bg-accent text-black' : 'bg-card-bg border border-border-c text-text-s hover:text-text-p'}`}
+            >
+              {t==='A'?'🤖 AI':t==='B'?'🚗 EV':'🦾 機器人'}
+            </button>
+          ))}
+        </div>
+        {themeLayers.map((layer, idx) => (
           <LayerCard
             key={layer.id}
             layer={layer}
@@ -178,6 +193,7 @@ export function SupplyChainMap() {
             }
             loading={instiLoading}
             onClick={() => setSelectedLayerId(layer.id)}
+            isLast={idx === themeLayers.length - 1}
           />
         ))}
       </div>
@@ -235,6 +251,7 @@ export function SupplyChainMap() {
                 <StockCard
                   stock={stock}
                   selectedMA={selectedMA}
+                  insti={null}
                   onClick={() => setModalStock(stock)}
                 />
               </div>

@@ -12,8 +12,22 @@ echo.
 echo   First time? Run setup.bat first.
 echo.
 
-:: Start backend in a new window
-echo [1/2] Starting backend (new window)...
+:: Make sure frontend has been built (setup.bat does this too; this is a safety net)
+if not exist "%~dp0frontend\dist\index.html" (
+    echo Frontend dist not found. Building frontend first...
+    cd frontend
+    call npm run build
+    if errorlevel 1 (
+        echo   [FAIL] Frontend build failed. Please run setup.bat.
+        pause
+        exit /b 1
+    )
+    cd ..
+)
+
+:: Start backend in a new window — backend serves both API and the built
+:: React app, so we don't need a separate frontend server.
+echo [1/2] Starting backend (serves API + frontend on port 8000)...
 start "AI Stock Radar - Backend" cmd /k "cd /d %~dp0backend && python -m uvicorn main:app --host 127.0.0.1 --port 8000"
 
 :: Wait for backend to come up
@@ -35,23 +49,11 @@ echo   [OK] Backend ready
 
 echo.
 echo ================================================================
-echo   Opening browser...
+echo   Opening browser to http://127.0.0.1:8000/
 echo ================================================================
-
-if exist "%~dp0frontend\dist\index.html" (
-    echo Using built frontend at frontend\dist
-    start "AI Stock Radar - Frontend" cmd /k "cd /d %~dp0frontend\dist && python -m http.server 5173"
-    timeout /t 2 /nobreak >nul
-    start "" http://127.0.0.1:5173/
-) else (
-    echo No built frontend found, using dev mode (npm run dev)
-    start "AI Stock Radar - Frontend" cmd /k "cd /d %~dp0frontend && npm run dev"
-    timeout /t 5 /nobreak >nul
-    start "" http://127.0.0.1:5173/
-)
-
+start "" http://127.0.0.1:8000/
 echo.
-echo   Browser opened. Closing this window will NOT stop the app.
-echo   To fully stop: close both Backend and Frontend windows.
+echo   Keep the Backend window open while you use the app.
+echo   Close the Backend window to fully stop everything.
 echo.
 pause

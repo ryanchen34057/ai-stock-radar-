@@ -31,9 +31,6 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Electron build artefacts (huge binaries — not committed)
-electron/node_modules/
-electron/release/
-electron/python-embed/
-electron/*.zip
-electron/python-*.zip
+# Large user-specific runtime artefacts
+data/stocks.db
+data/*.db-journal

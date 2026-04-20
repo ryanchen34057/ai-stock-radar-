@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDashboardStore } from './store/dashboardStore';
 import { Dashboard } from './components/Dashboard';
-import { SupplyChainMap } from './components/SupplyChainMap';
 import { NewsFeed } from './components/NewsFeed';
 import { KolFeed } from './components/KolFeed';
 import { FbFeed } from './components/FbFeed';
@@ -12,7 +11,7 @@ import { SetupOverlay } from './components/SetupOverlay';
 import { OnboardingGuide } from './components/OnboardingGuide';
 import { usePanelLayout, usePanelVisibility, type PanelId } from './hooks/usePanelLayout';
 
-type Tab = 'dashboard' | 'chain' | 'settings';
+type Tab = 'dashboard' | 'settings';
 
 interface PanelDescriptor {
   id: PanelId;
@@ -55,7 +54,6 @@ export default function App() {
       {/* Global tab bar */}
       <nav className="flex items-center gap-0 border-b border-border-c bg-card-bg px-4 flex-shrink-0">
         <TabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')}>📊 儀表板</TabButton>
-        <TabButton active={tab === 'chain'}     onClick={() => setTab('chain')}>🔗 供應鏈地圖</TabButton>
         <TabButton active={tab === 'settings'}  onClick={() => setTab('settings')}>⚙ 設定</TabButton>
         <div className="ml-auto flex items-center gap-1">
           <PanelToggles />
@@ -75,7 +73,6 @@ export default function App() {
         <div className="flex-1 min-w-0 min-h-0 relative">
           <div className="absolute inset-0 overflow-y-auto">
             {tab === 'dashboard' && <Dashboard />}
-            {tab === 'chain'     && <SupplyChainMap />}
             {tab === 'settings'  && <Settings />}
           </div>
 

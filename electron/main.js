@@ -65,28 +65,57 @@ function startBackend() {
 
   const env = { ...process.env };
   env.FRONTEND_DIST_DIR = frontendDistDir();
-  // Make sure embedded Python finds our site-packages (production only)
+  // User data dir — DB, settings, FB profile, Playwright cache all go here
+  // so the install dir itself stays read-only (avoids Program Files permissions).
+  env.USER_DATA_DIR = app.getPath('userData');
   if (!IS_DEV) {
-    env.PYTHONHOME = path.join(resourcesRoot(), 'python');
-    env.PYTHONPATH = [
-      path.join(resourcesRoot(), 'python', 'Lib', 'site-packages'),
-      cwd,
-    ].join(path.delimiter);
+    // Embedded Python reads paths from python311._pth, NOT from PYTHONHOME.
+    // Setting PYTHONHOME on embedded Python actively breaks it.
+    // The _pth file contains:
+    //     python311.zip
+    //     .
+    //     Lib\site-packages
+    //     import site
+    // so pip-installed packages resolve correctly without env vars.
+    // We DO add the backend dir so `from app.xxx` imports resolve.
+    env.PYTHONPATH = cwd;
+    // Playwright browsers live inside the packaged resources tree
+    env.PLAYWRIGHT_BROWSERS_PATH = path.join(resourcesRoot(), 'python', 'playwright-browsers');
   }
 
   const args = ['-m', 'uvicorn', 'main:app',
                 '--host', '127.0.0.1', '--port', String(BACKEND_PORT)];
 
   console.log(`[main] spawn: ${py} ${args.join(' ')} (cwd=${cwd})`);
+  console.log(`[main] USER_DATA_DIR=${env.USER_DATA_DIR}`);
+  console.log(`[main] FRONTEND_DIST_DIR=${env.FRONTEND_DIST_DIR}`);
   backendProcess = spawn(py, args, { cwd, env, windowsHide: true });
 
-  backendProcess.stdout.on('data', (d) => process.stdout.write(`[backend] ${d}`));
-  backendProcess.stderr.on('data', (d) => process.stderr.write(`[backend] ${d}`));
+  // Ring-buffer last N lines of stderr so we can surface them in the error dialog
+  const stderrRing = [];
+  const pushStderr = (line) => {
+    stderrRing.push(line);
+    if (stderrRing.length > 80) stderrRing.shift();
+  };
+
+  backendProcess.stdout.on('data', (d) => {
+    const s = d.toString();
+    process.stdout.write(`[backend] ${s}`);
+  });
+  backendProcess.stderr.on('data', (d) => {
+    const s = d.toString();
+    process.stderr.write(`[backend] ${s}`);
+    s.split(/\r?\n/).forEach((line) => { if (line.trim()) pushStderr(line); });
+  });
   backendProcess.on('exit', (code) => {
     console.log(`[main] backend exited code=${code}`);
     backendProcess = null;
     if (mainWindow && !mainWindow.isDestroyed() && code !== 0) {
-      dialog.showErrorBox('後端伺服器已停止', `後端意外結束 (exit code ${code})。請重新開啟本程式。`);
+      const tail = stderrRing.slice(-25).join('\n');
+      dialog.showErrorBox(
+        '後端伺服器已停止',
+        `後端意外結束 (exit code ${code})\n\n最後幾行日誌：\n${tail || '(no output)'}`
+      );
     }
   });
 }

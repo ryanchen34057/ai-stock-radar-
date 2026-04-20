@@ -34,8 +34,9 @@ from app.database import get_connection
 
 logger = logging.getLogger(__name__)
 
+_user_data = os.environ.get("USER_DATA_DIR") or str(Path.home() / ".ai-stock-radar")
 PROFILE_DIR = Path(os.environ.get("FB_PROFILE_DIR",
-                                  str(Path.home() / ".ai-stock-radar" / "fb_profile")))
+                                  str(Path(_user_data) / "fb_profile")))
 PROFILE_DIR.mkdir(parents=True, exist_ok=True)
 SCRAPE_TIMEOUT_SEC = 40
 MAX_POSTS_PER_PAGE = 15

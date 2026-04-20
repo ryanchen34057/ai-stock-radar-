@@ -2,8 +2,17 @@ import os
 import sqlite3
 from pathlib import Path
 
-# DB lives at backend/data/stocks.db
-DB_PATH = Path(__file__).parent.parent.parent / "data" / "stocks.db"
+# DB location resolution:
+#   1. $USER_DATA_DIR env var (set by the Electron wrapper to %APPDATA%\AI-Stock-Radar
+#      so a packaged install doesn't try to write inside Program Files)
+#   2. Fall back to <repo>/backend/data/stocks.db (dev mode)
+_env_data = os.environ.get("USER_DATA_DIR")
+if _env_data:
+    _DATA_DIR = Path(_env_data)
+else:
+    _DATA_DIR = Path(__file__).parent.parent.parent / "data"
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = _DATA_DIR / "stocks.db"
 
 
 def get_connection() -> sqlite3.Connection:

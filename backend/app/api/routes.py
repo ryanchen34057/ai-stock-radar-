@@ -908,10 +908,16 @@ def fb_list_pages():
 
 @router.post("/fb/pages", status_code=201)
 def fb_add_page(payload: FbPagePayload):
+    import sqlite3
     try:
         return fb_service.add_page(payload.url_or_handle, payload.name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except sqlite3.OperationalError as e:
+        # DB was locked by a long-running background job (FB refresh etc.)
+        # Surface a retryable 503 instead of a bare 500.
+        raise HTTPException(status_code=503,
+            detail=f"資料庫暫時忙碌，請 10 秒後再試：{e}")
 
 
 @router.delete("/fb/pages/{page_id}")

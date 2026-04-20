@@ -16,9 +16,22 @@ DB_PATH = _DATA_DIR / "stocks.db"
 
 
 def get_connection() -> sqlite3.Connection:
-    """Return a sqlite3 connection with row_factory set to sqlite3.Row."""
-    conn = sqlite3.connect(str(DB_PATH))
+    """Return a sqlite3 connection with row_factory set to sqlite3.Row.
+
+    Concurrency settings:
+      - WAL journal mode allows one writer + many readers in parallel (the
+        default rollback journal blocks all readers during writes).
+      - busy_timeout=5s makes SQLite wait-and-retry instead of immediately
+        raising OperationalError when a lock is held by another connection.
+        This lets APScheduler's FB/KOL background jobs coexist with
+        user-initiated writes (add_page, settings save, etc.).
+      - synchronous=NORMAL is safe with WAL and faster than FULL.
+    """
+    conn = sqlite3.connect(str(DB_PATH), timeout=5.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 

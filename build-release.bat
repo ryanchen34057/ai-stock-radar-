@@ -1,49 +1,48 @@
 @echo off
 setlocal enabledelayedexpansion
-chcp 65001 >nul
-title AI 股票雷達 · 打包發行版
+title AI Stock Radar - Build Release
 
 echo.
 echo ================================================================
-echo   打包 AI 產業鏈股票雷達 for Windows
+echo   AI Stock Radar - Build Windows Installer
 echo ================================================================
 echo.
-echo   本腳本會產出：electron/release/AI-Stock-Radar-Setup-1.0.0.exe
-echo   （安裝版）以及 Portable 版。
+echo   Output: electron\release\AI-Stock-Radar-Setup-1.0.0.exe
+echo           electron\release\AI-Stock-Radar-Portable-1.0.0.exe
 echo.
-echo   需求：
-echo     - Python 3.11+
-echo     - Node.js 20+
-echo     - 網路連線（下載 embedded Python、deps）
+echo   Requirements:
+echo     - Python 3.11+ on PATH
+echo     - Node.js 20+ on PATH
+echo     - Internet connection
 echo.
-echo   預估時間：15-30 分鐘（首次）
+echo   Time: 15-30 minutes on first build
 echo ================================================================
 pause
 
 cd /d "%~dp0"
 
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 :: Step 1: Build React frontend as static files
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 echo.
-echo [1/6] 編譯 React 前端...
+echo [1/6] Building React frontend...
 cd frontend
 call npm install
 if errorlevel 1 goto fail
 call npm run build
 if errorlevel 1 goto fail
 cd ..
-echo   [OK] 前端已編譯至 frontend/dist
+echo   [OK] Frontend built to frontend\dist
 
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 :: Step 2: Download embedded Python
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 set PYTHON_VERSION=3.11.9
 set PYTHON_ZIP=python-%PYTHON_VERSION%-embed-amd64.zip
 set PYTHON_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/%PYTHON_ZIP%
 
 echo.
-echo [2/6] 下載 embedded Python %PYTHON_VERSION%...
+echo [2/6] Downloading embedded Python %PYTHON_VERSION%...
 if not exist "electron\python-embed" (
     if not exist "electron\%PYTHON_ZIP%" (
         powershell -Command "Invoke-WebRequest -Uri '%PYTHON_URL%' -OutFile 'electron\%PYTHON_ZIP%'"
@@ -52,7 +51,7 @@ if not exist "electron\python-embed" (
     powershell -Command "Expand-Archive -Path 'electron\%PYTHON_ZIP%' -DestinationPath 'electron\python-embed' -Force"
     if errorlevel 1 goto fail
 
-    :: Enable pip: uncomment import site in python311._pth
+    :: Enable pip by uncommenting "import site" in python311._pth
     powershell -Command "(Get-Content 'electron\python-embed\python311._pth') -replace '#import site', 'import site' | Set-Content 'electron\python-embed\python311._pth'"
 
     :: Install pip
@@ -60,46 +59,46 @@ if not exist "electron\python-embed" (
     electron\python-embed\python.exe electron\python-embed\get-pip.py --no-warn-script-location
     if errorlevel 1 goto fail
 
-    echo   [OK] embedded Python 已安裝
+    echo   [OK] Embedded Python installed
 ) else (
-    echo   [SKIP] 已存在 electron/python-embed
+    echo   [SKIP] electron\python-embed already exists
 )
 
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 :: Step 3: Install backend dependencies into embedded Python
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 echo.
-echo [3/6] 安裝後端 Python 套件到 embedded Python...
+echo [3/6] Installing backend Python packages into embedded Python...
 electron\python-embed\python.exe -m pip install --no-warn-script-location -r backend\requirements.txt
 if errorlevel 1 goto fail
-echo   [OK] Python 套件已安裝
+echo   [OK] Python packages installed
 
-:: ──────────────────────────────────────────────────────────────────
-:: Step 4: Install Playwright Chromium into embedded Python
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
+:: Step 4: Install Playwright Chromium
+:: --------------------------------------------------------------
 echo.
-echo [4/6] 下載 Playwright Chromium（FB 抓取用，~150MB）...
+echo [4/6] Downloading Playwright Chromium (~150 MB for FB scraping)...
 set PLAYWRIGHT_BROWSERS_PATH=%CD%\electron\python-embed\playwright-browsers
 electron\python-embed\python.exe -m playwright install chromium
 if errorlevel 1 goto fail
-echo   [OK] Playwright Chromium 已安裝
+echo   [OK] Playwright Chromium installed
 
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 :: Step 5: Install Electron dependencies
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 echo.
-echo [5/6] 安裝 Electron 套件...
+echo [5/6] Installing Electron packages...
 cd electron
 call npm install
 if errorlevel 1 goto fail
 cd ..
-echo   [OK] Electron 套件已安裝
+echo   [OK] Electron packages installed
 
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 :: Step 6: Build installer + portable exe
-:: ──────────────────────────────────────────────────────────────────
+:: --------------------------------------------------------------
 echo.
-echo [6/6] 打包 Electron 安裝檔（需要 5-15 分鐘）...
+echo [6/6] Packaging Electron installer (5-15 minutes)...
 cd electron
 call npm run dist
 if errorlevel 1 goto fail
@@ -107,16 +106,16 @@ cd ..
 
 echo.
 echo ================================================================
-echo   打包完成！
+echo   Build complete!
 echo ================================================================
 echo.
-echo   產出檔案：
+echo   Output files:
 dir /b electron\release\*.exe
 echo.
-echo   - AI-Stock-Radar-Setup-*.exe  → 標準安裝版
-echo   - AI-Stock-Radar-Portable-*.exe → 免安裝版
+echo   - AI-Stock-Radar-Setup-*.exe    (NSIS installer)
+echo   - AI-Stock-Radar-Portable-*.exe (portable, no install)
 echo.
-echo   這兩個檔案都是 self-contained，使用者不用裝 Python / Node。
+echo   These are self-contained; end users do NOT need Python or Node.
 echo ================================================================
 pause
 exit /b 0
@@ -124,7 +123,7 @@ exit /b 0
 :fail
 echo.
 echo ================================================================
-echo   打包失敗！請檢查上方錯誤訊息。
+echo   Build failed! Check the error messages above.
 echo ================================================================
 pause
 exit /b 1

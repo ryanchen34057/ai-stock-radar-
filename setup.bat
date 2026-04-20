@@ -1,21 +1,20 @@
 @echo off
 setlocal enabledelayedexpansion
-chcp 65001 >nul
-title AI 產業鏈股票雷達 · 一鍵安裝
+title AI Stock Radar - Setup
 
 echo.
 echo ================================================================
-echo   AI 產業鏈股票雷達 - 第一次安裝
+echo   AI Stock Radar - First-time Setup
 echo ================================================================
 echo.
-echo   會自動檢查並安裝：
-echo     1. Python 3.11+
-echo     2. Node.js 20+
-echo     3. 後端 Python 套件
-echo     4. 前端 JS 套件
-echo     5. Playwright 瀏覽器（Facebook 貼文抓取用）
+echo   Auto-installs:
+echo     1. Python 3.11+ check
+echo     2. Node.js 20+ check
+echo     3. Backend Python packages
+echo     4. Frontend JS packages
+echo     5. Playwright Chromium (for Facebook scraping)
 echo.
-echo   整個過程約 5-10 分鐘
+echo   Time: ~5-10 minutes
 echo ================================================================
 echo.
 pause
@@ -24,84 +23,84 @@ cd /d "%~dp0"
 
 :: ---- Python check ----
 echo.
-echo [1/5] 檢查 Python...
+echo [1/5] Checking Python...
 where python >nul 2>nul
 if errorlevel 1 (
-    echo   找不到 Python，請先安裝：
-    echo     1. 到 https://www.python.org/downloads/ 下載 Python 3.11 以上
-    echo     2. 安裝時勾選 "Add Python to PATH"
-    echo     3. 安裝完後重新執行本程式
+    echo   Python not found. Please install first:
+    echo     1. https://www.python.org/downloads/  (Python 3.11+)
+    echo     2. IMPORTANT: check "Add Python to PATH" during install
+    echo     3. Re-run this script after installing
     pause
     exit /b 1
 )
 python --version
-echo   [OK] Python 已安裝
+echo   [OK] Python installed
 
 :: ---- Node check ----
 echo.
-echo [2/5] 檢查 Node.js...
+echo [2/5] Checking Node.js...
 where node >nul 2>nul
 if errorlevel 1 (
-    echo   找不到 Node.js，請先安裝：
-    echo     1. 到 https://nodejs.org/ 下載 LTS 版本
-    echo     2. 一路下一步安裝
-    echo     3. 安裝完後重新執行本程式
+    echo   Node.js not found. Please install first:
+    echo     1. https://nodejs.org/  (LTS version)
+    echo     2. Next-next-finish install
+    echo     3. Re-run this script after installing
     pause
     exit /b 1
 )
 node --version
-echo   [OK] Node.js 已安裝
+echo   [OK] Node.js installed
 
 :: ---- Backend deps ----
 echo.
-echo [3/5] 安裝後端 Python 套件（可能需要 3-5 分鐘）...
+echo [3/5] Installing backend Python packages (3-5 min)...
 cd backend
 python -m pip install --upgrade pip >nul
 python -m pip install -r requirements.txt
 if errorlevel 1 (
-    echo   [FAIL] Python 套件安裝失敗，請檢查網路
+    echo   [FAIL] Python package install failed - check internet
     pause
     exit /b 1
 )
-echo   [OK] Python 套件安裝完成
+echo   [OK] Python packages installed
 cd ..
 
 :: ---- Frontend deps ----
 echo.
-echo [4/5] 安裝前端 JS 套件（可能需要 2-3 分鐘）...
+echo [4/5] Installing frontend JS packages (2-3 min)...
 cd frontend
 call npm install
 if errorlevel 1 (
-    echo   [FAIL] npm install 失敗，請檢查網路
+    echo   [FAIL] npm install failed - check internet
     pause
     exit /b 1
 )
 call npm run build
 if errorlevel 1 (
-    echo   [FAIL] 前端編譯失敗
+    echo   [FAIL] Frontend build failed
     pause
     exit /b 1
 )
-echo   [OK] 前端安裝完成
+echo   [OK] Frontend built
 cd ..
 
 :: ---- Playwright browser ----
 echo.
-echo [5/5] 安裝 Playwright Chromium 瀏覽器（FB 抓取用）...
+echo [5/5] Installing Playwright Chromium (for FB scraping)...
 cd backend
 python -m playwright install chromium
 cd ..
-echo   [OK] Playwright 已安裝
+echo   [OK] Playwright installed
 
 echo.
 echo ================================================================
-echo   安裝完成！
+echo   Setup complete!
 echo ================================================================
 echo.
-echo   接下來要「啟動」應用程式：
-echo     請執行  run.bat
+echo   To start the app:
+echo     run.bat
 echo.
-echo   第一次啟動時會花 5-15 分鐘抓取所有股票歷史資料，
-echo   網頁上會有進度條告訴你目前進度。
+echo   First launch takes 5-15 min to fetch all stock history.
+echo   A progress bar will show which stock is being fetched.
 echo.
 pause

@@ -1,7 +1,10 @@
 from fastapi import APIRouter, HTTPException, Query
 from app.services.stock_service import get_dashboard_data, update_all_stocks, load_stocks_json, fetch_missing_klines, fetch_logos_from_tradingview
 from app.services.institutional_service import get_institutional_data
-from app.services.news_service import get_news, get_aggregated_feed, refresh_all_news
+from app.services import institutional_service, setup_progress
+from app.services.news_service import get_news, get_aggregated_feed, refresh_all_news, get_capacity_analysis, refresh_one_stalest
+from app.services import kol_service
+from app.services import fb_service
 from app.services.youtube_service import get_mentions, run_youtube_pipeline
 from app.database import get_connection
 from datetime import datetime, timezone
@@ -9,6 +12,7 @@ from pydantic import BaseModel
 import logging
 import os
 import threading
+from pathlib import Path
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -18,6 +22,35 @@ _pipeline_lock = threading.Lock()
 _pipeline_running = False
 _pipeline_started_at: str | None = None
 _pipeline_last_result: dict | None = None
+
+# News-refresh background state (single-flight lock — prevents overlapping
+# scrapes when the frontend autopoll fires faster than a scrape completes)
+_news_refresh_lock = threading.Lock()
+_news_refresh_running = False
+_news_refresh_started_at: str | None = None
+_news_refresh_last_result: dict | None = None
+
+# KOL refresh background state
+_kol_refresh_lock = threading.Lock()
+_kol_refresh_running = False
+_kol_refresh_started_at: str | None = None
+_kol_refresh_last_result: dict | None = None
+
+# NotebookLM browser-login background state
+_nblm_login_lock = threading.Lock()
+_nblm_login_running = False
+_nblm_login_started_at: str | None = None
+_nblm_login_last_result: dict | None = None
+
+# Facebook refresh + login background state
+_fb_refresh_lock = threading.Lock()
+_fb_refresh_running = False
+_fb_refresh_started_at: str | None = None
+_fb_refresh_last_result: dict | None = None
+_fb_login_lock = threading.Lock()
+_fb_login_running = False
+_fb_login_started_at: str | None = None
+_fb_login_last_result: dict | None = None
 
 _SETTINGS_KEYS = {"YOUTUBE_API_KEY", "GEMINI_API_KEY", "YOUTUBE_CHANNEL_ID", "GEMINI_MODEL"}
 
@@ -38,15 +71,176 @@ def _mask(key: str) -> str:
 
 
 @router.get("/stocks")
-def list_stocks():
+def list_stocks(include_disabled: bool = Query(default=True)):
+    """
+    List all stocks with management-relevant fields (tier, enabled, themes).
+    Used by the stock management UI.
+    """
     conn = get_connection()
     try:
-        rows = conn.execute(
-            "SELECT symbol, name, layer, layer_name, sub_category, note, theme, themes FROM stocks ORDER BY theme, layer, symbol"
-        ).fetchall()
-        return [dict(r) for r in rows]
+        sql = ("SELECT symbol, name, layer, layer_name, sub_category, note, theme, themes, "
+               "tier, enabled, created_at, updated_at FROM stocks")
+        if not include_disabled:
+            sql += " WHERE enabled = 1"
+        sql += " ORDER BY theme, layer, symbol"
+        rows = conn.execute(sql).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["enabled"] = bool(d.get("enabled", 1))
+            if d.get("themes"):
+                try:
+                    d["themes"] = json.loads(d["themes"])
+                except Exception:
+                    pass
+            out.append(d)
+        return out
     finally:
         conn.close()
+
+
+class StockPayload(BaseModel):
+    symbol: str
+    name: str
+    layer: int
+    layer_name: str | None = None  # auto-filled from layer mapping if blank
+    sub_category: str | None = None
+    note: str | None = None
+    theme: str = "A"
+    tier: int = 2
+    enabled: bool = True
+    secondary_layers: list[int] | None = None
+
+
+# Canonical layer → (display num, name, theme) — mirrors frontend LAYER_META
+_LAYER_META = {
+    1: ("晶片設計與製造", "A"), 2: ("化合物半導體", "A"), 3: ("記憶體", "A"),
+    4: ("PCB 載板", "A"), 5: ("PCB 主機板", "A"), 6: ("散熱電源", "A"),
+    7: ("光通訊 CPO", "A"), 8: ("被動元件", "A"), 9: ("ODM 組裝", "A"),
+    10: ("電力基礎建設", "A"),
+    16: ("半導體設備與精密零組件", "A"), 17: ("特用化學材料", "A"),
+    18: ("機殼滑軌結構件", "A"), 19: ("測試封測介面", "A"),
+    25: ("連接器與線材", "A"), 26: ("工業電腦邊緣 AI", "A"),
+    11: ("電池材料", "B"), 12: ("三電傳動", "B"), 13: ("車用線束", "B"),
+    14: ("車燈光學", "B"), 15: ("充電基建", "B"),
+    21: ("減速機傳動", "C"), 22: ("伺服馬達", "C"),
+    23: ("機電整合", "C"), 24: ("感測末端", "C"),
+}
+
+
+def _resolve_layer(p: StockPayload) -> tuple[str, str]:
+    """Return (layer_name, theme) — fills from LAYER_META when payload omits."""
+    meta = _LAYER_META.get(p.layer)
+    layer_name = p.layer_name or (meta[0] if meta else f"Layer {p.layer}")
+    theme = p.theme or (meta[1] if meta else "A")
+    return layer_name, theme
+
+
+@router.post("/stocks", status_code=201)
+def create_stock(payload: StockPayload):
+    """
+    Add a new stock. Layer info auto-filled from canonical meta if client
+    omits layer_name/theme. Kicks off background kline + EPS fetch for the
+    new symbol so data shows up in the dashboard without a server restart.
+    """
+    from app.services.stock_service import fetch_yfinance, upsert_klines, upsert_metadata
+    layer_name, theme = _resolve_layer(payload)
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_connection()
+    try:
+        existing = conn.execute("SELECT symbol FROM stocks WHERE symbol = ?", (payload.symbol,)).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail=f"Stock {payload.symbol} already exists")
+        conn.execute(
+            """INSERT INTO stocks
+               (symbol, name, layer, layer_name, sub_category, note, theme, themes,
+                secondary_layers, tier, enabled, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (payload.symbol, payload.name, payload.layer, layer_name,
+             payload.sub_category, payload.note, theme, None,
+             json.dumps(payload.secondary_layers) if payload.secondary_layers else None,
+             payload.tier, 1 if payload.enabled else 0, now, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Background fetch: klines + metadata (tolerant of failures)
+    def _fetch_bg():
+        try:
+            df, info = fetch_yfinance(payload.symbol, "5y")
+            if df is not None and not df.empty:
+                upsert_klines(payload.symbol, df)
+                if info:
+                    upsert_metadata(payload.symbol, info)
+        except Exception as e:
+            logger.error(f"create_stock bg fetch {payload.symbol}: {e}")
+
+    threading.Thread(target=_fetch_bg, daemon=True).start()
+    return {"status": "ok", "symbol": payload.symbol, "layer_name": layer_name, "theme": theme}
+
+
+@router.put("/stocks/{symbol}")
+def update_stock(symbol: str, payload: StockPayload):
+    """Edit an existing stock's metadata (no data refetch)."""
+    if payload.symbol != symbol:
+        raise HTTPException(status_code=400, detail="Path symbol does not match payload symbol")
+    layer_name, theme = _resolve_layer(payload)
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_connection()
+    try:
+        res = conn.execute(
+            """UPDATE stocks SET
+                 name=?, layer=?, layer_name=?, sub_category=?, note=?, theme=?,
+                 secondary_layers=?, tier=?, enabled=?, updated_at=?
+               WHERE symbol=?""",
+            (payload.name, payload.layer, layer_name, payload.sub_category,
+             payload.note, theme,
+             json.dumps(payload.secondary_layers) if payload.secondary_layers else None,
+             payload.tier, 1 if payload.enabled else 0, now, symbol),
+        )
+        conn.commit()
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Stock not found")
+    finally:
+        conn.close()
+    return {"status": "ok", "symbol": symbol}
+
+
+@router.patch("/stocks/{symbol}/enabled")
+def set_stock_enabled(symbol: str, enabled: bool = Query(...)):
+    """Toggle only the enabled flag — the dashboard hides disabled stocks."""
+    conn = get_connection()
+    try:
+        res = conn.execute(
+            "UPDATE stocks SET enabled=?, updated_at=? WHERE symbol=?",
+            (1 if enabled else 0, datetime.now(timezone.utc).isoformat(), symbol),
+        )
+        conn.commit()
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Stock not found")
+    finally:
+        conn.close()
+    return {"status": "ok", "symbol": symbol, "enabled": enabled}
+
+
+@router.delete("/stocks/{symbol}")
+def delete_stock(symbol: str):
+    """Hard-delete a stock and all its related data (klines, metadata, caches)."""
+    conn = get_connection()
+    try:
+        res = conn.execute("DELETE FROM stocks WHERE symbol=?", (symbol,))
+        conn.execute("DELETE FROM klines WHERE symbol=?", (symbol,))
+        conn.execute("DELETE FROM metadata WHERE symbol=?", (symbol,))
+        conn.execute("DELETE FROM news_cache WHERE symbol=?", (symbol,))
+        conn.execute("DELETE FROM eps_annual WHERE symbol=?", (symbol,))
+        conn.execute("DELETE FROM eps_quarterly WHERE symbol=?", (symbol,))
+        conn.commit()
+        if res.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Stock not found")
+    finally:
+        conn.close()
+    return {"status": "ok", "symbol": symbol}
 
 
 @router.get("/stocks/{symbol}")
@@ -134,6 +328,8 @@ def cleanup_orphans():
             conn.execute("DELETE FROM stocks WHERE symbol=?", (sym,))
             conn.execute("DELETE FROM klines WHERE symbol=?", (sym,))
             conn.execute("DELETE FROM metadata WHERE symbol=?", (sym,))
+            conn.execute("DELETE FROM eps_annual WHERE symbol=?", (sym,))
+            conn.execute("DELETE FROM eps_quarterly WHERE symbol=?", (sym,))
         conn.commit()
         return {"status": "ok", "removed": sorted(orphans)}
     finally:
@@ -171,15 +367,30 @@ def get_institutional(date: str | None = Query(default=None, description="YYYYMM
     """
     Return three-institution (外資/投信/自營商) buy/sell and margin trading
     (融資/融券) data for all stocks, sourced from TWSE and TPEx public APIs.
+
+    Write guards:
+      - Only write cache rows when at least one of the two source endpoints
+        (institutional or margin) actually returned data for that symbol.
+        This prevents a failed TWSE T86 fetch from overwriting a good prior
+        row with all-zero defaults. A genuine zero (symbol IS in the response
+        with net=0) is preserved.
     """
     try:
         result = get_institutional_data(date)
 
-        # Cache in DB
+        insti_covered  = set(result.get("insti_covered", []))
+        margin_covered = set(result.get("margin_covered", []))
+
         conn = get_connection()
         try:
             rows = []
+            skipped_empty = 0
             for sym, d in result["stocks"].items():
+                # Skip if NEITHER source knew about this symbol — the values
+                # are all synthesised zeros, which would corrupt cache.
+                if sym not in insti_covered and sym not in margin_covered:
+                    skipped_empty += 1
+                    continue
                 rows.append((sym, result["date"],
                              d["foreign_net"], d["trust_net"],
                              d["dealer_net"],  d["total_net"],
@@ -193,13 +404,51 @@ def get_institutional(date: str | None = Query(default=None, description="YYYYMM
                 rows,
             )
             conn.commit()
+            if skipped_empty:
+                logger.info(f"institutional cache: skipped {skipped_empty} symbols with no source coverage")
         finally:
             conn.close()
 
-        return result
+        # Strip internal coverage keys before returning
+        return {"date": result["date"], "stocks": result["stocks"]}
     except Exception as e:
         logger.error(f"Institutional data error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/setup/progress")
+def get_setup_progress():
+    """First-run / startup data-sweep progress. Frontend polls this at 1Hz."""
+    return setup_progress.snapshot()
+
+
+@router.get("/institutional/history/{symbol}")
+def institutional_history(symbol: str, days: int = Query(default=20, ge=1, le=60)):
+    """Return the last N days of institutional + margin data for one symbol,
+    sourced from institutional_cache. Use `POST /api/institutional/backfill`
+    to fill cache if empty."""
+    return {"symbol": symbol, "days": days,
+            "history": institutional_service.get_history(symbol, days=days)}
+
+
+@router.post("/institutional/backfill")
+def institutional_backfill(days: int = Query(default=20, ge=1, le=60)):
+    """Fetch last N weekdays of institutional data from TWSE/TPEx into cache.
+    Runs in the foreground — small calls, ~2s per day."""
+    return institutional_service.backfill_institutional_history(days=days)
+
+
+@router.delete("/institutional/cache")
+def clear_institutional_cache():
+    """Wipe the institutional_cache table. Next GET will re-fetch fresh."""
+    conn = get_connection()
+    try:
+        n = conn.execute("SELECT COUNT(*) FROM institutional_cache").fetchone()[0]
+        conn.execute("DELETE FROM institutional_cache")
+        conn.commit()
+        return {"status": "ok", "removed": n}
+    finally:
+        conn.close()
 
 
 @router.get("/news/feed")
@@ -214,14 +463,67 @@ def news_feed(limit: int = Query(default=150, ge=10, le=500)):
 
 
 @router.post("/news/refresh-all")
-def news_refresh_all(skip_fresh_hours: int = Query(default=6, ge=0, le=168)):
-    """Background-fetch Google News for every stock (only stale or missing cache)."""
+def news_refresh_all(skip_fresh_hours: float = Query(default=6.0, ge=0, le=168)):
+    """
+    Fire a background scrape of Google News + MOPS for every stock whose cache
+    is older than `skip_fresh_hours`. Returns immediately; a single-flight lock
+    coalesces concurrent calls so the frontend autopoll can't cause overlap.
+    """
+    global _news_refresh_running, _news_refresh_started_at
+
+    if not _news_refresh_lock.acquire(blocking=False):
+        return {"status": "already_running", "started_at": _news_refresh_started_at}
+    if _news_refresh_running:
+        _news_refresh_lock.release()
+        return {"status": "already_running", "started_at": _news_refresh_started_at}
+    _news_refresh_running = True
+    _news_refresh_started_at = datetime.now(timezone.utc).isoformat()
+
+    def _worker():
+        global _news_refresh_running, _news_refresh_last_result
+        try:
+            conn = get_connection()
+            try:
+                result = refresh_all_news(conn, skip_fresh_hours=skip_fresh_hours)
+                _news_refresh_last_result = result
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.error(f"news_refresh_all worker failed: {e}")
+            _news_refresh_last_result = {"error": str(e)}
+        finally:
+            _news_refresh_running = False
+            _news_refresh_lock.release()
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return {"status": "started", "started_at": _news_refresh_started_at}
+
+
+@router.post("/news/refresh-one")
+def news_refresh_one():
+    """
+    Trickle-feed refresh: scrape news for the single stock with the oldest
+    cache entry (or no cache). Cheap — finishes in a couple of seconds.
+    Called on every frontend autopoll tick.
+    """
     conn = get_connection()
     try:
-        result = refresh_all_news(conn, skip_fresh_hours=skip_fresh_hours)
-        return {"status": "ok", **result}
+        return refresh_one_stalest(conn)
+    except Exception as e:
+        logger.error(f"news_refresh_one: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+
+
+@router.get("/news/refresh-status")
+def news_refresh_status():
+    """Whether a background refresh is in flight; used by the autopoll."""
+    return {
+        "running": _news_refresh_running,
+        "started_at": _news_refresh_started_at,
+        "last_result": _news_refresh_last_result,
+    }
 
 
 @router.get("/stocks/{symbol}/news")
@@ -236,6 +538,27 @@ def get_stock_news(symbol: str):
         raise
     except Exception as e:
         logger.error(f"News error ({symbol}): {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.get("/stocks/{symbol}/capacity")
+def get_stock_capacity(symbol: str):
+    """
+    Capacity-analysis bundle: capacity-filtered MOPS + news (from existing
+    cache) plus curated links to 法說會 / 年報 / 產業研究.
+    """
+    conn = get_connection()
+    try:
+        stock = conn.execute("SELECT name FROM stocks WHERE symbol = ?", (symbol,)).fetchone()
+        if not stock:
+            raise HTTPException(status_code=404, detail="Stock not found")
+        return get_capacity_analysis(symbol, stock["name"], conn)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Capacity error ({symbol}): {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
@@ -375,3 +698,353 @@ def save_settings(payload: SettingsPayload):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# KOL (財經 YouTuber) channels + feed
+# ────────────────────────────────────────────────────────────────────────────
+
+class KolChannelPayload(BaseModel):
+    url_or_id: str
+    name: str | None = None
+
+
+@router.get("/kol/channels")
+def kol_list_channels():
+    return kol_service.list_channels()
+
+
+@router.post("/kol/channels", status_code=201)
+def kol_add_channel(payload: KolChannelPayload):
+    try:
+        return kol_service.add_channel(payload.url_or_id, payload.name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=412, detail=str(e))
+
+
+@router.delete("/kol/channels/{channel_id}")
+def kol_delete_channel(channel_id: str):
+    ok = kol_service.delete_channel(channel_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    return {"status": "ok", "channel_id": channel_id}
+
+
+@router.patch("/kol/channels/{channel_id}/enabled")
+def kol_toggle_channel(channel_id: str, enabled: bool = Query(...)):
+    ok = kol_service.set_channel_enabled(channel_id, enabled)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    return {"status": "ok", "channel_id": channel_id, "enabled": enabled}
+
+
+@router.get("/kol/feed")
+def kol_feed(days: int = Query(default=7, ge=1, le=30)):
+    return {"items": kol_service.get_kol_feed(days=days), "days": days}
+
+
+@router.post("/kol/refresh")
+def kol_refresh(
+    days: int = Query(default=7, ge=1, le=30),
+    force: bool = Query(default=False, description="Re-summarise even successful videos"),
+):
+    """
+    Background refresh: fetch recent videos from every enabled KOL channel,
+    summarise via NotebookLM. Coalesced by a single-flight lock. Videos
+    without a successful summariser are always retried; pass force=true to
+    re-run even successful ones.
+    """
+    global _kol_refresh_running, _kol_refresh_started_at, _kol_refresh_last_result
+
+    if not _kol_refresh_lock.acquire(blocking=False):
+        return {"status": "already_running", "started_at": _kol_refresh_started_at}
+    if _kol_refresh_running:
+        _kol_refresh_lock.release()
+        return {"status": "already_running", "started_at": _kol_refresh_started_at}
+    _kol_refresh_running = True
+    _kol_refresh_started_at = datetime.now(timezone.utc).isoformat()
+
+    def _worker():
+        global _kol_refresh_running, _kol_refresh_last_result
+        try:
+            _kol_refresh_last_result = kol_service.refresh_all_kol_feeds(days=days, force=force)
+        except Exception as e:
+            logger.error(f"kol_refresh worker: {e}")
+            _kol_refresh_last_result = {"error": str(e)}
+        finally:
+            _kol_refresh_running = False
+            _kol_refresh_lock.release()
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return {"status": "started", "started_at": _kol_refresh_started_at, "force": force}
+
+
+@router.get("/kol/refresh-status")
+def kol_refresh_status():
+    return {
+        "running": _kol_refresh_running,
+        "started_at": _kol_refresh_started_at,
+        "last_result": _kol_refresh_last_result,
+    }
+
+
+@router.get("/kol/notebooklm-status")
+def kol_notebooklm_status():
+    """Report whether the NotebookLM CLI is installed and authenticated."""
+    from app.services import notebooklm_adapter
+    return notebooklm_adapter.check_auth()
+
+
+@router.post("/kol/notebooklm-login")
+def kol_notebooklm_login():
+    """
+    Trigger `notebooklm login` in the backend process. The CLI opens a
+    Playwright Chromium window on the server machine (same as the user's
+    browser since it's localhost) for Google OAuth; the user completes
+    the login there. Returns immediately; use the status endpoint to poll.
+    """
+    global _nblm_login_running, _nblm_login_started_at, _nblm_login_last_result
+    import subprocess
+    from app.services import notebooklm_adapter
+
+    if not _nblm_login_lock.acquire(blocking=False):
+        return {"status": "already_running", "started_at": _nblm_login_started_at}
+    if _nblm_login_running:
+        _nblm_login_lock.release()
+        return {"status": "already_running", "started_at": _nblm_login_started_at}
+
+    cli = notebooklm_adapter.get_cli()
+    if cli is None:
+        _nblm_login_lock.release()
+        raise HTTPException(status_code=412,
+                            detail="notebooklm CLI not installed — pip install notebooklm-py")
+
+    _nblm_login_running = True
+    _nblm_login_started_at = datetime.now(timezone.utc).isoformat()
+    _nblm_login_last_result = None
+
+    def _worker():
+        import sys
+        global _nblm_login_running, _nblm_login_last_result
+        try:
+            # IMPORTANT: notebooklm login is an interactive CLI — after the
+            # browser OAuth it waits for the user to press ENTER in the
+            # terminal to save the cookie. So we must:
+            #   1) Give it a new visible console window
+            #   2) NOT redirect stdout/stderr — the instructions ("Press ENTER")
+            #      must appear in that console so the user knows what to do
+            # On success, the CLI writes auth.json and exits; the console
+            # window closes. We then re-check auth to confirm.
+            popen_kwargs: dict = {}
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+                # Wrap in cmd /k so the window stays open even after the CLI
+                # exits — user can read any final message.
+                args = ["cmd", "/k", *cli, "login"]
+            else:
+                args = cli + ["login"]
+
+            p = subprocess.Popen(args, **popen_kwargs)
+            try:
+                # Give user up to 15 min to complete Google OAuth + press ENTER
+                p.wait(timeout=900)
+            except subprocess.TimeoutExpired:
+                try: p.kill()
+                except Exception: pass
+                _nblm_login_last_result = {"returncode": 124,
+                                            "error": "登入超時（>15 分鐘） — 請重試"}
+                return
+
+            from app.services import notebooklm_adapter
+            auth = notebooklm_adapter.check_auth()
+            if auth.get("authenticated"):
+                _nblm_login_last_result = {"returncode": 0, "authenticated": True}
+            else:
+                _nblm_login_last_result = {
+                    "returncode": p.returncode if p.returncode is not None else -1,
+                    "error": (
+                        "cmd 視窗關閉了，但 NotebookLM 狀態仍未通過驗證。\n\n"
+                        "常見原因：\n"
+                        "1. 完成 Google 登入後，必須回到彈出的 cmd 黑色視窗「按 ENTER」才會儲存 cookie\n"
+                        "2. 若 Google 顯示「無法登入（瀏覽器不安全）」，是 Playwright 被偵測 — 請改用 "
+                        "`NOTEBOOKLM_AUTH_JSON` 方式手動匯入 cookie（見 SKILL.md）\n"
+                    ),
+                    "auth_message": auth.get("message", ""),
+                }
+        except Exception as e:
+            _nblm_login_last_result = {"returncode": -1, "error": str(e)}
+        finally:
+            _nblm_login_running = False
+            _nblm_login_lock.release()
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return {"status": "started", "started_at": _nblm_login_started_at}
+
+
+@router.get("/kol/notebooklm-login/status")
+def kol_notebooklm_login_status():
+    return {
+        "running": _nblm_login_running,
+        "started_at": _nblm_login_started_at,
+        "last_result": _nblm_login_last_result,
+    }
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Facebook pages + feed
+# ────────────────────────────────────────────────────────────────────────────
+
+class FbPagePayload(BaseModel):
+    url_or_handle: str
+    name: str | None = None
+
+
+@router.get("/fb/pages")
+def fb_list_pages():
+    return fb_service.list_pages()
+
+
+@router.post("/fb/pages", status_code=201)
+def fb_add_page(payload: FbPagePayload):
+    try:
+        return fb_service.add_page(payload.url_or_handle, payload.name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/fb/pages/{page_id}")
+def fb_delete_page(page_id: str):
+    ok = fb_service.delete_page(page_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Page not found")
+    return {"status": "ok", "id": page_id}
+
+
+@router.patch("/fb/pages/{page_id}/enabled")
+def fb_toggle_page(page_id: str, enabled: bool = Query(...)):
+    ok = fb_service.set_page_enabled(page_id, enabled)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Page not found")
+    return {"status": "ok", "id": page_id, "enabled": enabled}
+
+
+@router.get("/fb/feed")
+def fb_get_feed(days: int = Query(default=7, ge=1, le=60), limit: int = Query(default=100, ge=10, le=500)):
+    return {"items": fb_service.get_feed(days=days, limit=limit), "days": days}
+
+
+@router.delete("/fb/posts")
+def fb_clear_posts():
+    """Wipe the scraped post cache (keeps configured pages). Use after
+    scraper improvements to clear stale / garbage content."""
+    n = fb_service.clear_all_posts()
+    return {"status": "ok", "removed": n}
+
+
+@router.post("/fb/reanalyse")
+def fb_reanalyse(force: bool = Query(default=False,
+                 description="true=ignore cache and re-analyse every post (burns quota)")):
+    """
+    Re-run Gemini analysis on stored FB posts (background).
+    Default skips posts that already have a successful Gemini result —
+    pass ?force=true to force re-analysis of everything.
+    """
+    def _worker():
+        try:
+            fb_service.reanalyse_all_posts(force=force)
+        except Exception as e:
+            logger.error(f"fb_reanalyse: {e}")
+    threading.Thread(target=_worker, daemon=True).start()
+    return {"status": "started", "force": force}
+
+
+@router.get("/fb/debug")
+def fb_debug(url: str = Query(...)):
+    """Run the scraper against an arbitrary URL and return diagnostics.
+    Use this to troubleshoot when posts don't appear — it returns the
+    counts the DOM sees plus the first few extracted posts without persisting."""
+    return fb_service.scrape_debug(url)
+
+
+@router.post("/fb/refresh")
+def fb_refresh(days: int = Query(default=7, ge=1, le=30)):
+    global _fb_refresh_running, _fb_refresh_started_at, _fb_refresh_last_result
+    if not _fb_refresh_lock.acquire(blocking=False):
+        return {"status": "already_running", "started_at": _fb_refresh_started_at}
+    if _fb_refresh_running:
+        _fb_refresh_lock.release()
+        return {"status": "already_running", "started_at": _fb_refresh_started_at}
+    _fb_refresh_running = True
+    _fb_refresh_started_at = datetime.now(timezone.utc).isoformat()
+
+    def _worker():
+        global _fb_refresh_running, _fb_refresh_last_result
+        try:
+            _fb_refresh_last_result = fb_service.refresh_all_pages(days=days)
+        except Exception as e:
+            logger.error(f"fb_refresh worker: {e}")
+            _fb_refresh_last_result = {"error": str(e)}
+        finally:
+            _fb_refresh_running = False
+            _fb_refresh_lock.release()
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return {"status": "started", "started_at": _fb_refresh_started_at}
+
+
+@router.get("/fb/refresh-status")
+def fb_refresh_status():
+    return {
+        "running": _fb_refresh_running,
+        "started_at": _fb_refresh_started_at,
+        "last_result": _fb_refresh_last_result,
+    }
+
+
+@router.get("/fb/auth-status")
+def fb_auth_status():
+    return fb_service.check_auth()
+
+
+@router.post("/fb/login")
+def fb_login():
+    global _fb_login_running, _fb_login_started_at, _fb_login_last_result
+    if not _fb_login_lock.acquire(blocking=False):
+        return {"status": "already_running", "started_at": _fb_login_started_at}
+    if _fb_login_running:
+        _fb_login_lock.release()
+        return {"status": "already_running", "started_at": _fb_login_started_at}
+    _fb_login_running = True
+    _fb_login_started_at = datetime.now(timezone.utc).isoformat()
+    _fb_login_last_result = None
+
+    def _worker():
+        global _fb_login_running, _fb_login_last_result
+        try:
+            rc, err = fb_service.launch_login_window()
+            auth = fb_service.check_auth()
+            _fb_login_last_result = {
+                "returncode": rc,
+                "authenticated": auth.get("authenticated"),
+                "message": auth.get("message"),
+                "stderr_tail": err,
+            }
+        except Exception as e:
+            _fb_login_last_result = {"returncode": -1, "error": str(e)}
+        finally:
+            _fb_login_running = False
+            _fb_login_lock.release()
+
+    threading.Thread(target=_worker, daemon=True).start()
+    return {"status": "started", "started_at": _fb_login_started_at}
+
+
+@router.get("/fb/login-status")
+def fb_login_status():
+    return {
+        "running": _fb_login_running,
+        "started_at": _fb_login_started_at,
+        "last_result": _fb_login_last_result,
+    }

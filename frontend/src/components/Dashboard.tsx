@@ -5,22 +5,29 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ControlBar } from './ControlBar';
 import { StatsSummary } from './StatsSummary';
 import { StockGrid } from './StockGrid';
-import { StockDetailModal } from './StockDetailModal';
+
 export function Dashboard() {
   const {
     stocks, loading, error,
     selectedMA, alertFilter, maProximityFilter, specialFilters, instiFilters,
-    selectedLayers, sortBy, selectedStock, setSelectedStock,
+    priceFilter, peFilter, kdFilters,
+    themeFilter, tierFilter, searchQuery,
+    selectedLayers, sortBy,
   } = useDashboardStore();
-  const { fetchData } = useStockData();
+  const { fetchData, refresh } = useStockData();
   useKeyboardShortcuts();
 
   useEffect(() => {
     fetchData();
+    // Auto-refresh every 60s so intraday MIS prices surface without a manual
+    // reload. refresh() bypasses the 5-min TTL cache.
+    const id = window.setInterval(() => refresh(), 60_000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <div className="min-h-screen bg-dash-bg text-text-p">
+    <div className="bg-dash-bg text-text-p">
       <ControlBar />
 
       <div className="px-4 py-4">
@@ -59,6 +66,12 @@ export function Dashboard() {
               maProximityFilter={maProximityFilter}
               specialFilters={specialFilters}
               instiFilters={instiFilters}
+              priceFilter={priceFilter}
+              peFilter={peFilter}
+              kdFilters={kdFilters}
+              themeFilter={themeFilter}
+              tierFilter={tierFilter}
+              searchQuery={searchQuery}
               selectedLayers={selectedLayers}
               sortBy={sortBy}
             />
@@ -80,15 +93,6 @@ export function Dashboard() {
           </div>
         )}
       </div>
-
-      {/* Detail modal */}
-      {selectedStock && (
-        <StockDetailModal
-          stock={selectedStock}
-          selectedMA={selectedMA}
-          onClose={() => setSelectedStock(null)}
-        />
-      )}
     </div>
   );
 }

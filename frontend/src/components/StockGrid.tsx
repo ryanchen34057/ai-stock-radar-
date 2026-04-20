@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, SpecialFilters, InstiFilters } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance } from '../utils/calcMA';
+import { getDisplayPe } from '../utils/formatPe';
+import { calculateKD, getKDTrend } from '../utils/calcKD';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useInstitutional } from '../hooks/useInstitutional';
 
@@ -12,19 +15,52 @@ interface Props {
   maProximityFilter: MAProximityFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
+  priceFilter: RangeFilter;
+  peFilter: RangeFilter;
+  kdFilters: KDFilters;
+  themeFilter: ThemeFilter;
+  tierFilter: TierFilter;
+  searchQuery: string;
   selectedLayers: number[];
   sortBy: SortBy;
 }
 
 export function StockGrid({
   stocks, selectedMA, alertFilter, maProximityFilter,
-  specialFilters, instiFilters, selectedLayers, sortBy,
+  specialFilters, instiFilters, priceFilter, peFilter, kdFilters,
+  themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
   const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
   const { data: insti } = useInstitutional();
 
   const filtered = useMemo(() => {
     let result = stocks;
+
+    // Theme filter (A/B/C/all/cross) — 'cross' = stocks tagged with >1 theme
+    if (themeFilter === 'cross') {
+      result = result.filter((s) => (s.themes?.length ?? 0) > 1);
+    } else if (themeFilter !== 'all') {
+      result = result.filter((s) =>
+        s.theme === themeFilter || (s.themes ?? []).includes(themeFilter)
+      );
+    }
+
+    // Tier filter — 1 = only T1, 2 = T1+T2, 3 = all
+    result = result.filter((s) => {
+      const t = s.tier ?? 2;
+      return t <= tierFilter;
+    });
+
+    // Search (symbol or name, case-insensitive). Applied AFTER tier/theme so
+    // typing overrides theme selection lets the user jump to any stock.
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter((s) =>
+        s.symbol.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        (s.sub_category ?? '').toLowerCase().includes(q)
+      );
+    }
 
     // Layer filter
     if (selectedLayers.length > 0) {
@@ -90,6 +126,45 @@ export function StockGrid({
       result = result.filter((s) => s.is_all_time_high);
     }
 
+    // Price range filter
+    if (priceFilter.enabled && (priceFilter.min !== null || priceFilter.max !== null)) {
+      result = result.filter((s) => {
+        if (s.current_price === null) return false;
+        if (priceFilter.min !== null && s.current_price < priceFilter.min) return false;
+        if (priceFilter.max !== null && s.current_price > priceFilter.max) return false;
+        return true;
+      });
+    }
+
+    // PE range filter — uses the same displayed PE (computed TTM) as card/tooltip
+    if (peFilter.enabled && (peFilter.min !== null || peFilter.max !== null)) {
+      result = result.filter((s) => {
+        const pe = getDisplayPe(s);
+        if (pe === null) return false;
+        if (peFilter.min !== null && pe < peFilter.min) return false;
+        if (peFilter.max !== null && pe > peFilter.max) return false;
+        return true;
+      });
+    }
+
+    // KD (5,3,3) state filter — OR semantics across enabled pills
+    const anyKd = Object.values(kdFilters).some(Boolean);
+    if (anyKd) {
+      result = result.filter((s) => {
+        if (s.klines.length < 6) return false;
+        const { k, d } = calculateKD(s.klines, 5, 3, 3);
+        const { trend, k: kVal } = getKDTrend(k, d);
+        if (kVal === null) return false;
+        if (kdFilters.golden && trend === 'golden') return true;
+        if (kdFilters.death && trend === 'death') return true;
+        if (kdFilters.up && trend === 'up') return true;
+        if (kdFilters.down && trend === 'down') return true;
+        if (kdFilters.oversold && kVal < 20) return true;
+        if (kdFilters.overbought && kVal > 80) return true;
+        return false;
+      });
+    }
+
     // Institutional filters (skip if data not loaded)
     if (insti) {
       const inf = instiFilters;
@@ -127,7 +202,57 @@ export function StockGrid({
           return 0;
       }
     });
-  }, [stocks, selectedMA, alertFilter, maProximityFilter, specialFilters, instiFilters, selectedLayers, sortBy, insti]);
+  }, [stocks, selectedMA, alertFilter, maProximityFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
+
+  // ── Group by layer → sub_category ──────────────────────────────────────
+  // Tier 1 (龍頭) sorts first within each sub-group so it appears leftmost.
+  // Secondary order falls back to the user's sort criterion because
+  // Array.sort is stable and `filtered` is already pre-sorted.
+  interface SubGroup { sub: string; stocks: StockData[] }
+  interface LayerGroup { layer: number; layer_name: string; theme: string; subs: SubGroup[] }
+
+  const grouped: LayerGroup[] = useMemo(() => {
+    const byLayer = new Map<number, { name: string; theme: string; bySub: Map<string, StockData[]> }>();
+    for (const s of filtered) {
+      const lid = s.layer;
+      if (!byLayer.has(lid)) {
+        byLayer.set(lid, {
+          name: s.layer_name,
+          theme: LAYER_THEME[lid] || s.theme || 'A',
+          bySub: new Map(),
+        });
+      }
+      const sub = (s.sub_category ?? '').trim() || '未分類';
+      const layerRec = byLayer.get(lid)!;
+      if (!layerRec.bySub.has(sub)) layerRec.bySub.set(sub, []);
+      layerRec.bySub.get(sub)!.push(s);
+    }
+    // Sort inside each sub-group by market cap desc (biggest company leftmost).
+    // Stocks with no market_cap drop to the end.
+    for (const layerRec of byLayer.values()) {
+      for (const arr of layerRec.bySub.values()) {
+        arr.sort((a, b) => {
+          const mA = a.market_cap ?? -1;
+          const mB = b.market_cap ?? -1;
+          return mB - mA;
+        });
+      }
+    }
+    // Layer ordering: theme A first (1-10, 16-19, 25-26), then B (11-15), then C (21-24).
+    const themeOrder: Record<string, number> = { A: 0, B: 1, C: 2 };
+    return Array.from(byLayer.entries())
+      .map(([layer, r]) => ({
+        layer, layer_name: r.name, theme: r.theme,
+        // Sub-groups alphabetical within layer — simple & predictable
+        subs: Array.from(r.bySub.entries())
+          .sort((a, b) => a[0].localeCompare(b[0], 'zh-TW'))
+          .map(([sub, stocks]) => ({ sub, stocks })),
+      }))
+      .sort((a, b) => {
+        const to = (themeOrder[a.theme] ?? 9) - (themeOrder[b.theme] ?? 9);
+        return to !== 0 ? to : a.layer - b.layer;
+      });
+  }, [filtered]);
 
   if (filtered.length === 0) {
     return (
@@ -140,16 +265,46 @@ export function StockGrid({
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-      {filtered.map((stock) => (
-        <StockCard
-          key={stock.symbol}
-          stock={stock}
-          selectedMA={selectedMA}
-          insti={insti?.stocks[stock.symbol] ?? null}
-          onClick={() => setSelectedStock(stock)}
-        />
-      ))}
+    <div className="space-y-5">
+      {grouped.map(({ layer, layer_name, theme, subs }) => {
+        // Flatten sub-groups into one continuous list so cards pack across
+        // rows; sub-categories stay adjacent because `subs` is sorted and
+        // each sub-group's array is tier-sorted (龍頭 first).
+        const flat = subs.flatMap(({ stocks }) => stocks);
+        const leaders = flat.filter((s) => (s.tier ?? 2) === 1);
+        return (
+          <section key={layer}>
+            {/* Layer header */}
+            <header className="flex items-baseline gap-2 flex-wrap mb-2 pb-1.5 border-b border-border-c">
+              <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-accent/20 text-accent font-bold">
+                {layerShortCode(layer)}
+              </span>
+              <h2 className="text-base font-bold text-text-p">{layer_name}</h2>
+              <span className="text-[11px] text-text-t">
+                {THEME_LABELS[theme] ?? theme} · {flat.length} 檔 · {subs.length} 題材
+              </span>
+              {leaders.length > 0 && (
+                <span className="text-[11px] text-accent font-semibold ml-auto">
+                  ◆ 龍頭：{leaders.map((s) => `${s.symbol} ${s.name}`).join('・')}
+                </span>
+              )}
+            </header>
+
+            {/* Single horizontal grid per layer */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {flat.map((stock) => (
+                <StockCard
+                  key={stock.symbol}
+                  stock={stock}
+                  selectedMA={selectedMA}
+                  insti={insti?.stocks[stock.symbol] ?? null}
+                  onClick={() => setSelectedStock(stock)}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

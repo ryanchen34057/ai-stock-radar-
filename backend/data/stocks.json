@@ -6,7 +6,9 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "晶圓代工",
     "note": "CoWoS 先進封裝全球獨家",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "3711",
@@ -15,7 +17,9 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "封測",
     "note": "CoWoS 第二供應商",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "6147",
@@ -24,7 +28,9 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "封測",
     "note": "驅動 IC 封測龍頭",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "2449",
@@ -33,7 +39,9 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "測試",
     "note": "AI 晶片測試產能擴充",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "3661",
@@ -42,7 +50,9 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "ASIC 設計服務",
     "note": "AWS Trainium 3 主要夥伴",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "3443",
@@ -51,7 +61,9 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "ASIC 設計服務",
     "note": "台積電子公司，微軟 Maia",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "3035",
@@ -60,7 +72,9 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "ASIC 設計服務",
     "note": "聯電旗下，基期較低",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "2454",
@@ -69,7 +83,9 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "IC 設計",
     "note": "Google TPU v7e/v8x",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "5274",
@@ -78,7 +94,9 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "伺服器 IC",
     "note": "BMC 晶片全球 80% 市占",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "6531",
@@ -87,16 +105,20 @@
     "layer_name": "晶片設計與製造",
     "sub_category": "記憶體 IC 設計",
     "note": "與創意合作客製 HBM",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "2486",
     "name": "一詮",
     "layer": 1,
     "layer_name": "晶片設計與製造",
-    "sub_category": "先進封裝散熱元件",
-    "note": "CoWoS 均熱片，NVIDIA/Google 供應",
-    "theme": "A"
+    "sub_category": "先進封裝散熱",
+    "note": "CoWoS 均熱片",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "3105",
@@ -104,8 +126,10 @@
     "layer": 2,
     "layer_name": "化合物半導體",
     "sub_category": "GaAs/InP 代工",
-    "note": "全球最大砷化鎵代工廠",
+    "note": "全球最大砷化鎵代工",
     "theme": "A",
+    "tier": 1,
+    "enabled": true,
     "industry_role": "上游"
   },
   {
@@ -116,6 +140,8 @@
     "sub_category": "InP 磊晶片",
     "note": "光通訊 PA + CPO 磊晶",
     "theme": "A",
+    "tier": 1,
+    "enabled": true,
     "industry_role": "上游"
   },
   {
@@ -126,7 +152,60 @@
     "sub_category": "GaAs 代工",
     "note": "穩懋主要競爭者",
     "theme": "A",
+    "tier": 2,
+    "enabled": true,
     "industry_role": "上游"
+  },
+  {
+    "symbol": "6488",
+    "name": "環球晶",
+    "layer": 2,
+    "layer_name": "化合物半導體",
+    "sub_category": "SiC 基板 + GaN-on-Si",
+    "note": "全球第三大矽晶圓，SiC 8 吋 2026 量產",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true,
+    "secondary_layers": [
+      15
+    ],
+    "themes": [
+      "A",
+      "B"
+    ]
+  },
+  {
+    "symbol": "3016",
+    "name": "嘉晶",
+    "layer": 2,
+    "layer_name": "化合物半導體",
+    "sub_category": "SiC + GaN 磊晶",
+    "note": "漢磊投控旗下",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "3707",
+    "name": "漢磊",
+    "layer": 2,
+    "layer_name": "化合物半導體",
+    "sub_category": "SiC IGBT + MOSFET 代工",
+    "note": "第三代半導體老牌",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "8255",
+    "name": "朋程",
+    "layer": 2,
+    "layer_name": "化合物半導體",
+    "sub_category": "SiC 電源 IC",
+    "note": "中美晶集團 IDM",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "2408",
@@ -135,7 +214,9 @@
     "layer_name": "記憶體",
     "sub_category": "DRAM",
     "note": "台廠 DRAM 龍頭",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "2344",
@@ -143,8 +224,10 @@
     "layer": 3,
     "layer_name": "記憶體",
     "sub_category": "DRAM + NOR",
-    "note": "CUBE 客製記憶體切邊緣 AI",
-    "theme": "A"
+    "note": "CUBE 客製切邊緣 AI",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "2337",
@@ -153,7 +236,9 @@
     "layer_name": "記憶體",
     "sub_category": "NOR + NAND",
     "note": "eMMC + NOR 雙漲",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "8299",
@@ -162,16 +247,27 @@
     "layer_name": "記憶體",
     "sub_category": "NAND 控制 IC",
     "note": "SSD 控制晶片龍頭",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "6770",
     "name": "力積電",
     "layer": 3,
     "layer_name": "記憶體",
-    "sub_category": "DRAM 代工",
-    "note": "晶圓代工 + DRAM",
-    "theme": "A"
+    "sub_category": "DRAM + GaN 代工",
+    "note": "接手台積電 GaN，2026 產能翻倍",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true,
+    "secondary_layers": [
+      15
+    ],
+    "themes": [
+      "A",
+      "B"
+    ]
   },
   {
     "symbol": "6239",
@@ -180,7 +276,53 @@
     "layer_name": "記憶體",
     "sub_category": "記憶體封測",
     "note": "HBM + DDR5 封裝",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "5289",
+    "name": "宜鼎",
+    "layer": 3,
+    "layer_name": "記憶體",
+    "sub_category": "工業級 SSD",
+    "note": "AI 邊緣運算儲存",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "3260",
+    "name": "威剛",
+    "layer": 3,
+    "layer_name": "記憶體",
+    "sub_category": "記憶體模組",
+    "note": "消費 + 企業級儲存",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "4967",
+    "name": "十銓",
+    "layer": 3,
+    "layer_name": "記憶體",
+    "sub_category": "記憶體模組",
+    "note": "消費級模組",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "8088",
+    "name": "品安",
+    "layer": 3,
+    "layer_name": "記憶體",
+    "sub_category": "企業級 SSD 控制",
+    "note": "資料中心儲存",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "3037",
@@ -189,7 +331,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "ABF 載板",
     "note": "NVIDIA Blackwell 第二供應",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "8046",
@@ -198,7 +342,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "ABF 載板",
     "note": "博通 + 800G 交換器",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "3189",
@@ -207,7 +353,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "BT + ABF 載板",
     "note": "HBM + AI 手機",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "2383",
@@ -216,7 +364,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "CCL 銅箔基板",
     "note": "M8/M9 高階龍頭",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "6274",
@@ -225,7 +375,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "CCL 銅箔基板",
     "note": "台光電主要競爭對手",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "6213",
@@ -233,8 +385,10 @@
     "layer": 4,
     "layer_name": "PCB 載板",
     "sub_category": "CCL 銅箔基板",
-    "note": "切入 AI 高階相對落後",
-    "theme": "A"
+    "note": "AI 高階相對落後",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "1815",
@@ -243,7 +397,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "T-Glass 玻纖布",
     "note": "台廠 T-Glass 新進",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "1802",
@@ -252,16 +408,97 @@
     "layer_name": "PCB 載板",
     "sub_category": "T-Glass 玻纖布",
     "note": "傳統玻璃廠轉型",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "8358",
+    "name": "金居",
+    "layer": 4,
+    "layer_name": "PCB 載板",
+    "sub_category": "HVLP 高階銅箔",
+    "note": "Rubin HVLP4 必用",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "5475",
+    "name": "德宏",
+    "layer": 4,
+    "layer_name": "PCB 載板",
+    "sub_category": "CCL 材料",
+    "note": "2025 漲幅前三名",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "3715",
+    "name": "定穎投控",
+    "layer": 4,
+    "layer_name": "PCB 載板",
+    "sub_category": "PCB 複合",
+    "note": "Google V6/V7 供應鏈",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "4722",
+    "name": "國精化",
+    "layer": 4,
+    "layer_name": "PCB 載板",
+    "sub_category": "PCB 化學品",
+    "note": "電鍍、濕製程化學品",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "5340",
+    "name": "建榮",
+    "layer": 4,
+    "layer_name": "PCB 載板",
+    "sub_category": "PCB 電子化學材料",
+    "note": "化學品供應",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "2368",
     "name": "金像電",
     "layer": 5,
     "layer_name": "PCB 主機板",
-    "sub_category": "PCB 主機板",
+    "sub_category": "AI PCB 主機板",
     "note": "AWS Trainium ASIC 主供",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "5439",
+    "name": "高技",
+    "layer": 5,
+    "layer_name": "PCB 主機板",
+    "sub_category": "AI ASIC PCB",
+    "note": "AWS Trainium 2/3 主供",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "6191",
+    "name": "精成科",
+    "layer": 5,
+    "layer_name": "PCB 主機板",
+    "sub_category": "AI PCB",
+    "note": "Google LCS 供應鏈",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "2313",
@@ -270,7 +507,9 @@
     "layer_name": "PCB 主機板",
     "sub_category": "PCB 主機板",
     "note": "汽車板 + 低軌衛星",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "3044",
@@ -279,7 +518,9 @@
     "layer_name": "PCB 主機板",
     "sub_category": "PCB 主機板",
     "note": "網通交換器",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "5469",
@@ -288,7 +529,9 @@
     "layer_name": "PCB 主機板",
     "sub_category": "PCB 主機板",
     "note": "伺服器 + 網通",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "8021",
@@ -297,7 +540,9 @@
     "layer_name": "PCB 主機板",
     "sub_category": "PCB 鑽針",
     "note": "全球前二大",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "3167",
@@ -306,7 +551,9 @@
     "layer_name": "PCB 主機板",
     "sub_category": "PCB 背鑽機",
     "note": "全球少數供應商",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "8074",
@@ -315,7 +562,20 @@
     "layer_name": "PCB 主機板",
     "sub_category": "PCB 墊板",
     "note": "全球墊板龍頭",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "5498",
+    "name": "凱崴",
+    "layer": 5,
+    "layer_name": "PCB 主機板",
+    "sub_category": "PCB 鑽針",
+    "note": "尖點競爭者",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "3017",
@@ -324,7 +584,9 @@
     "layer_name": "散熱電源",
     "sub_category": "散熱水冷",
     "note": "Rubin 液冷模組首選",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "3324",
@@ -333,7 +595,9 @@
     "layer_name": "散熱電源",
     "sub_category": "散熱水冷",
     "note": "AWS + Meta 訂單",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "6805",
@@ -342,7 +606,9 @@
     "layer_name": "散熱電源",
     "sub_category": "快接頭 QDC",
     "note": "奇鋐子公司",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "3653",
@@ -351,7 +617,9 @@
     "layer_name": "散熱電源",
     "sub_category": "散熱",
     "note": "MCL 微通道液冷",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "6230",
@@ -360,7 +628,9 @@
     "layer_name": "散熱電源",
     "sub_category": "散熱",
     "note": "日商 Nidec 集團",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "2308",
@@ -368,14 +638,16 @@
     "layer": 6,
     "layer_name": "散熱電源",
     "sub_category": "電源 + HVDC",
-    "note": "全球電源供應器龍頭",
+    "note": "全球電源龍頭",
     "theme": "A",
+    "tier": 1,
+    "enabled": true,
+    "secondary_layers": [
+      15
+    ],
     "themes": [
       "A",
       "B"
-    ],
-    "secondary_layers": [
-      15
     ]
   },
   {
@@ -385,7 +657,9 @@
     "layer_name": "散熱電源",
     "sub_category": "電源 + HVDC",
     "note": "電源雙雄之一",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "6781",
@@ -394,7 +668,9 @@
     "layer_name": "散熱電源",
     "sub_category": "BBU 電池",
     "note": "NVIDIA GB200/300 標配",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "3211",
@@ -403,7 +679,9 @@
     "layer_name": "散熱電源",
     "sub_category": "BBU 電池",
     "note": "AWS + Google 低壓 BBU",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "4931",
@@ -412,7 +690,9 @@
     "layer_name": "散熱電源",
     "sub_category": "BBU 電池",
     "note": "打入 Meta 高壓專案",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "2345",
@@ -422,7 +702,21 @@
     "sub_category": "網通交換器",
     "note": "800G/1.6T Google 最大供應",
     "theme": "A",
+    "tier": 1,
+    "enabled": true,
     "industry_role": "下游"
+  },
+  {
+    "symbol": "3363",
+    "name": "上詮",
+    "layer": 7,
+    "layer_name": "光通訊 CPO",
+    "sub_category": "FAU 光纖陣列",
+    "note": "台積電 COUPE 唯一夥伴",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true,
+    "industry_role": "系統整合"
   },
   {
     "symbol": "4979",
@@ -432,6 +726,8 @@
     "sub_category": "光模組",
     "note": "CPO 核心供應鏈",
     "theme": "A",
+    "tier": 1,
+    "enabled": true,
     "industry_role": "下游"
   },
   {
@@ -442,6 +738,8 @@
     "sub_category": "光模組",
     "note": "Google 高芯數光纖",
     "theme": "A",
+    "tier": 2,
+    "enabled": true,
     "industry_role": "下游"
   },
   {
@@ -452,6 +750,8 @@
     "sub_category": "光模組",
     "note": "甲骨文 OpenAI AOC 主供",
     "theme": "A",
+    "tier": 2,
+    "enabled": true,
     "industry_role": "下游"
   },
   {
@@ -462,6 +762,8 @@
     "sub_category": "光模組 ELS",
     "note": "CPO 外部雷射源",
     "theme": "A",
+    "tier": 2,
+    "enabled": true,
     "industry_role": "上游"
   },
   {
@@ -472,6 +774,8 @@
     "sub_category": "InP 磊晶片",
     "note": "PAM4 驅動 IC + CPO",
     "theme": "A",
+    "tier": 1,
+    "enabled": true,
     "industry_role": "上游"
   },
   {
@@ -482,6 +786,8 @@
     "sub_category": "光被動元件",
     "note": "CPO 供應鏈",
     "theme": "A",
+    "tier": 2,
+    "enabled": true,
     "industry_role": "中游"
   },
   {
@@ -492,27 +798,9 @@
     "sub_category": "光引擎封裝",
     "note": "鴻海旗下，博通 CPO 夥伴",
     "theme": "A",
+    "tier": 1,
+    "enabled": true,
     "industry_role": "系統整合"
-  },
-  {
-    "symbol": "3363",
-    "name": "上詮",
-    "layer": 7,
-    "layer_name": "光通訊 CPO",
-    "sub_category": "FAU 光纖陣列",
-    "note": "台積電 COUPE 唯一夥伴，2026Q3 量產",
-    "theme": "A",
-    "industry_role": "系統整合"
-  },
-  {
-    "symbol": "4991",
-    "name": "環宇-KY",
-    "layer": 7,
-    "layer_name": "光通訊 CPO",
-    "sub_category": "InP 晶片代工",
-    "note": "AAOI 核心供應，InP 晶圓代工",
-    "theme": "A",
-    "industry_role": "上游"
   },
   {
     "symbol": "2327",
@@ -521,7 +809,9 @@
     "layer_name": "被動元件",
     "sub_category": "MLCC + 電阻 + 電容",
     "note": "全球被動元件整合龍頭",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "2492",
@@ -530,7 +820,9 @@
     "layer_name": "被動元件",
     "sub_category": "MLCC",
     "note": "台廠第二大",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "3026",
@@ -539,7 +831,9 @@
     "layer_name": "被動元件",
     "sub_category": "MLCC 車用 + AI",
     "note": "相對低基期",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "3357",
@@ -548,7 +842,9 @@
     "layer_name": "被動元件",
     "sub_category": "TLVR 電感",
     "note": "AI 伺服器新需求",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "2317",
@@ -558,14 +854,16 @@
     "sub_category": "ODM 組裝",
     "note": "GB 機櫃市占 52%",
     "theme": "A",
+    "tier": 1,
+    "enabled": true,
+    "secondary_layers": [
+      11,
+      21
+    ],
     "themes": [
       "A",
       "B",
       "C"
-    ],
-    "secondary_layers": [
-      12,
-      23
     ]
   },
   {
@@ -576,12 +874,14 @@
     "sub_category": "ODM 組裝",
     "note": "Google AI 最大代工",
     "theme": "A",
+    "tier": 1,
+    "enabled": true,
+    "secondary_layers": [
+      23
+    ],
     "themes": [
       "A",
       "C"
-    ],
-    "secondary_layers": [
-      23
     ]
   },
   {
@@ -591,7 +891,9 @@
     "layer_name": "ODM 組裝",
     "sub_category": "ODM 組裝",
     "note": "AMD + Dell",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "6669",
@@ -600,7 +902,9 @@
     "layer_name": "ODM 組裝",
     "sub_category": "ODM 組裝",
     "note": "100% 雲端 CSP 客戶",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "2356",
@@ -609,7 +913,9 @@
     "layer_name": "ODM 組裝",
     "sub_category": "ODM 組裝",
     "note": "L6 計算模組",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "8210",
@@ -618,7 +924,9 @@
     "layer_name": "ODM 組裝",
     "sub_category": "伺服器機殼",
     "note": "AI 機殼 + 水冷結構件",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "1519",
@@ -627,7 +935,9 @@
     "layer_name": "電力基礎建設",
     "sub_category": "大型變壓器",
     "note": "打入美國星際之門專案",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "1513",
@@ -636,7 +946,9 @@
     "layer_name": "電力基礎建設",
     "sub_category": "GIS 開關設備",
     "note": "台電獨家 + 台積電認證",
-    "theme": "A"
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
   },
   {
     "symbol": "1503",
@@ -645,7 +957,9 @@
     "layer_name": "電力基礎建設",
     "sub_category": "綜合型重電",
     "note": "AI 建廠設備雙引擎",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
   },
   {
     "symbol": "1514",
@@ -654,7 +968,680 @@
     "layer_name": "電力基礎建設",
     "sub_category": "重電",
     "note": "台積電美國專案 + IDC",
-    "theme": "A"
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3131",
+    "name": "弘塑",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "CoWoS 清洗設備",
+    "note": "台積電先進封裝清洗指定供應商",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "3583",
+    "name": "辛耘",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "CoWoS 濕製程",
+    "note": "CoWoS 濕製程設備",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "6187",
+    "name": "萬潤",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "AOI + 點膠機",
+    "note": "CoWoS + CPO 設備",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "6640",
+    "name": "均華",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "雷射 + 黏晶機",
+    "note": "先進封裝設備",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "5443",
+    "name": "均豪",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "精密機電",
+    "note": "半導體設備",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "2467",
+    "name": "志聖",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "烘烤設備",
+    "note": "玻璃基板卡位",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "6438",
+    "name": "迅得",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "雷射鑽孔",
+    "note": "先進封裝鑽孔",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3455",
+    "name": "由田",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "AOI 檢測",
+    "note": "光學自動檢測",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "6829",
+    "name": "千附精密",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "設備零組件 CDMO",
+    "note": "AMAT、KLA 供應鏈",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3413",
+    "name": "京鼎",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "設備零件製造",
+    "note": "東京威力科創供應",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3680",
+    "name": "家登",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "EUV 光罩盒",
+    "note": "先進製程載具",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "7734",
+    "name": "印能",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "先進封裝除泡設備",
+    "note": "CoWoS/HBM 供應鏈",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "6789",
+    "name": "采鈺",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "CIS + 矽光子光波導",
+    "note": "台積電 CoPoS 唯一夥伴",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "5434",
+    "name": "崇越",
+    "layer": 17,
+    "layer_name": "特用化學材料",
+    "sub_category": "日商信越化學台灣總代理",
+    "note": "矽晶圓、光阻、化學品通路",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3010",
+    "name": "華立",
+    "layer": 17,
+    "layer_name": "特用化學材料",
+    "sub_category": "台積電化學品代理通路",
+    "note": "化學品 + 設備代理",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "8028",
+    "name": "昇陽半導體",
+    "layer": 17,
+    "layer_name": "特用化學材料",
+    "sub_category": "矽晶圓再生",
+    "note": "再生晶圓供應",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "1560",
+    "name": "中砂",
+    "layer": 17,
+    "layer_name": "特用化學材料",
+    "sub_category": "CMP 研磨耗材",
+    "note": "研磨墊片/研磨液",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "4772",
+    "name": "台特化",
+    "layer": 17,
+    "layer_name": "特用化學材料",
+    "sub_category": "先進製程特殊氣體",
+    "note": "電子級氣體",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "4749",
+    "name": "新應材",
+    "layer": 17,
+    "layer_name": "特用化學材料",
+    "sub_category": "光阻劑 / 封裝膠材",
+    "note": "先進封裝材料",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "2059",
+    "name": "川湖",
+    "layer": 18,
+    "layer_name": "機殼滑軌結構件",
+    "sub_category": "伺服器導軌",
+    "note": "全球龍頭，毛利率 77%",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "6584",
+    "name": "南俊國際",
+    "layer": 18,
+    "layer_name": "機殼滑軌結構件",
+    "sub_category": "伺服器滑軌",
+    "note": "川湖競爭對手",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "5243",
+    "name": "乙盛-KY",
+    "layer": 18,
+    "layer_name": "機殼滑軌結構件",
+    "sub_category": "伺服器精密沖壓件",
+    "note": "鴻海集團旗下",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "6257",
+    "name": "矽格",
+    "layer": 19,
+    "layer_name": "測試封測介面",
+    "sub_category": "獨立 IC 測試",
+    "note": "台灣兩大獨立測試廠之一",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3264",
+    "name": "欣銓",
+    "layer": 19,
+    "layer_name": "測試封測介面",
+    "sub_category": "獨立 IC 測試",
+    "note": "聯發科、瑞昱主要測試廠",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "6510",
+    "name": "精測",
+    "layer": 19,
+    "layer_name": "測試封測介面",
+    "sub_category": "探針卡測試介面",
+    "note": "HBM 測試介面受惠",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "6223",
+    "name": "旺矽",
+    "layer": 19,
+    "layer_name": "測試封測介面",
+    "sub_category": "探針卡 + MEMS",
+    "note": "高階探針卡供應",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "2360",
+    "name": "致茂",
+    "layer": 19,
+    "layer_name": "測試封測介面",
+    "sub_category": "半導體自動測試設備",
+    "note": "2 奈米製程缺陷檢測",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "3563",
+    "name": "牧德",
+    "layer": 19,
+    "layer_name": "測試封測介面",
+    "sub_category": "AOI 自動光學檢測",
+    "note": "PCB 光學檢測",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "3533",
+    "name": "嘉澤",
+    "layer": 25,
+    "layer_name": "連接器與線材",
+    "sub_category": "CPU Socket + AI 連接器",
+    "note": "GB200/GB300 主要供應",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "6158",
+    "name": "禾昌",
+    "layer": 25,
+    "layer_name": "連接器與線材",
+    "sub_category": "連接器 + 汽車",
+    "note": "多應用綜合",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "6290",
+    "name": "良維",
+    "layer": 25,
+    "layer_name": "連接器與線材",
+    "sub_category": "電源線 + 線纜",
+    "note": "伺服器周邊",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "2395",
+    "name": "研華",
+    "layer": 26,
+    "layer_name": "工業電腦邊緣 AI",
+    "sub_category": "工業電腦龍頭",
+    "note": "邊緣 AI + AIoT",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "6414",
+    "name": "樺漢",
+    "layer": 26,
+    "layer_name": "工業電腦邊緣 AI",
+    "sub_category": "工業電腦 + 機器視覺",
+    "note": "AI 機器視覺",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "8050",
+    "name": "廣積",
+    "layer": 26,
+    "layer_name": "工業電腦邊緣 AI",
+    "sub_category": "工業電腦 + 特殊伺服器",
+    "note": "特殊應用伺服器",
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "4721",
+    "name": "美琪瑪",
+    "layer": 11,
+    "layer_name": "電池材料",
+    "sub_category": "PTA 觸媒 + 硫酸鈷/鎳",
+    "note": "全球最大 PTA 觸媒廠",
+    "theme": "B",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "4739",
+    "name": "康普",
+    "layer": 11,
+    "layer_name": "電池材料",
+    "sub_category": "PTA 觸媒 + 硫酸鈷/鎳",
+    "note": "寧德時代供應鏈",
+    "theme": "B",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "6509",
+    "name": "聚和",
+    "layer": 11,
+    "layer_name": "電池材料",
+    "sub_category": "特用化學品",
+    "note": "電池材料第三玩家",
+    "theme": "B",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "1536",
+    "name": "和大",
+    "layer": 12,
+    "layer_name": "三電傳動",
+    "sub_category": "電動車齒輪",
+    "note": "Tesla 核心 + 人形機器人",
+    "theme": "B",
+    "tier": 2,
+    "enabled": true,
+    "secondary_layers": [
+      21
+    ],
+    "themes": [
+      "B",
+      "C"
+    ]
+  },
+  {
+    "symbol": "2351",
+    "name": "順德",
+    "layer": 12,
+    "layer_name": "三電傳動",
+    "sub_category": "導線架",
+    "note": "車用半導體導線架",
+    "theme": "B",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "6235",
+    "name": "華孚",
+    "layer": 12,
+    "layer_name": "三電傳動",
+    "sub_category": "鎂合金壓鑄",
+    "note": "Tesla 結構件供應",
+    "theme": "B",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "2201",
+    "name": "裕隆",
+    "layer": 12,
+    "layer_name": "三電傳動",
+    "sub_category": "整車 + 零組件",
+    "note": "台灣車廠老牌",
+    "theme": "B",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "3665",
+    "name": "貿聯-KY",
+    "layer": 13,
+    "layer_name": "車用線束",
+    "sub_category": "高壓線束",
+    "note": "Tesla + AI 伺服器雙題材",
+    "theme": "B",
+    "tier": 1,
+    "enabled": true,
+    "secondary_layers": [
+      6
+    ],
+    "themes": [
+      "A",
+      "B"
+    ]
+  },
+  {
+    "symbol": "3023",
+    "name": "信邦",
+    "layer": 13,
+    "layer_name": "車用線束",
+    "sub_category": "充電線 + ADAS",
+    "note": "中國車廠 ADAS 合作",
+    "theme": "B",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3003",
+    "name": "健和興",
+    "layer": 13,
+    "layer_name": "車用線束",
+    "sub_category": "充電連接器",
+    "note": "高電流快充專用",
+    "theme": "B",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "6288",
+    "name": "聯嘉",
+    "layer": 14,
+    "layer_name": "車燈光學",
+    "sub_category": "LED 車燈",
+    "note": "Tesla Cybertruck 前車燈主供",
+    "theme": "B",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3552",
+    "name": "同致",
+    "layer": 14,
+    "layer_name": "車燈光學",
+    "sub_category": "ADAS 盲點偵測",
+    "note": "車用雷達感測",
+    "theme": "B",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "2457",
+    "name": "飛宏",
+    "layer": 15,
+    "layer_name": "充電基建",
+    "sub_category": "快充電源",
+    "note": "480kW 高速充電樁",
+    "theme": "B",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "6282",
+    "name": "康舒",
+    "layer": 15,
+    "layer_name": "充電基建",
+    "sub_category": "充電樁電源",
+    "note": "ChargePoint 合作",
+    "theme": "B",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "2049",
+    "name": "上銀",
+    "layer": 21,
+    "layer_name": "減速機傳動",
+    "sub_category": "滾珠螺桿 + 諧波減速機",
+    "note": "波士頓動力 + Tesla + 鴻海",
+    "theme": "C",
+    "tier": 1,
+    "enabled": true,
+    "secondary_layers": [
+      16
+    ],
+    "themes": [
+      "A",
+      "C"
+    ]
+  },
+  {
+    "symbol": "4576",
+    "name": "大銀微系統",
+    "layer": 21,
+    "layer_name": "減速機傳動",
+    "sub_category": "無框力矩馬達 + 編碼器",
+    "note": "上銀子公司，AI 物流",
+    "theme": "C",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "4571",
+    "name": "鈞興-KY",
+    "layer": 21,
+    "layer_name": "減速機傳動",
+    "sub_category": "諧波減速機",
+    "note": "打入機器人四大家族供應鏈",
+    "theme": "C",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "1597",
+    "name": "直得",
+    "layer": 21,
+    "layer_name": "減速機傳動",
+    "sub_category": "微型線性滑軌",
+    "note": "全球前三大，模組化關節",
+    "theme": "C",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "1504",
+    "name": "東元",
+    "layer": 22,
+    "layer_name": "伺服馬達",
+    "sub_category": "伺服馬達",
+    "note": "工業機器人馬達主力",
+    "theme": "C",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "4540",
+    "name": "全球傳動",
+    "layer": 22,
+    "layer_name": "伺服馬達",
+    "sub_category": "行星式滾柱螺桿",
+    "note": "靈巧手關鍵零件",
+    "theme": "C",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "2359",
+    "name": "所羅門",
+    "layer": 23,
+    "layer_name": "機電整合",
+    "sub_category": "機器視覺 AI",
+    "note": "AI 機器手臂視覺系統",
+    "theme": "C",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "6188",
+    "name": "廣明",
+    "layer": 23,
+    "layer_name": "機電整合",
+    "sub_category": "協作機器人",
+    "note": "廣達集團 Techman",
+    "theme": "C",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "3227",
+    "name": "原相",
+    "layer": 24,
+    "layer_name": "感測末端",
+    "sub_category": "影像感測 IC",
+    "note": "機器人視覺感測",
+    "theme": "C",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3019",
+    "name": "亞光",
+    "layer": 24,
+    "layer_name": "感測末端",
+    "sub_category": "光學鏡頭",
+    "note": "Robotaxi 光學感測",
+    "theme": "C",
+    "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "4991",
+    "name": "環宇-KY",
+    "layer": 7,
+    "layer_name": "光通訊 CPO",
+    "sub_category": "InP 晶片代工",
+    "note": "AAOI 核心供應，InP 晶圓代工",
+    "theme": "A",
+    "industry_role": "上游",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "1717",
@@ -663,7 +1650,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "PCB 材料/化工",
     "note": "環氧樹脂與特殊化學品，CCL基板核心原料",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "1301",
@@ -672,7 +1661,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "PCB 材料/化工",
     "note": "環氧樹脂原料供應，PCB上游化工",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "1303",
@@ -681,7 +1672,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "PCB 材料/化工",
     "note": "環氧樹脂/玻纖布，PCB材料整合",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "1313",
@@ -690,7 +1683,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "PCB 材料/化工",
     "note": "環氧樹脂，PCB上游原料",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "8039",
@@ -699,16 +1694,9 @@
     "layer_name": "PCB 載板",
     "sub_category": "PCB 材料/化工",
     "note": "高頻高速基板材料，AI伺服器PCB關鍵",
-    "theme": "A"
-  },
-  {
-    "symbol": "2059",
-    "name": "川湖",
-    "layer": 9,
-    "layer_name": "ODM 組裝",
-    "sub_category": "伺服器導軌",
-    "note": "伺服器機架滑軌全球第二大，GB200/GB300/Trainium全線供應",
-    "theme": "A"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   },
   {
     "symbol": "3013",
@@ -717,220 +1705,8 @@
     "layer_name": "ODM 組裝",
     "sub_category": "伺服器機殼",
     "note": "AI伺服器機殼，供應MTIA 2",
-    "theme": "A"
-  },
-  {
-    "symbol": "3715",
-    "name": "定穎投控",
-    "layer": 5,
-    "layer_name": "PCB 主機板",
-    "sub_category": "PCB 主機板",
-    "note": "通過GB300主板/子卡認證，AI伺服器高密度PCB",
-    "theme": "A"
-  },
-  {
-    "symbol": "4721",
-    "name": "美琪瑪",
-    "layer": 11,
-    "layer_name": "電池材料",
-    "sub_category": "鋰電池正極材料",
-    "note": "磷酸鋰鐵正極材料供應商",
-    "theme": "B"
-  },
-  {
-    "symbol": "4739",
-    "name": "康普",
-    "layer": 11,
-    "layer_name": "電池材料",
-    "sub_category": "電解液",
-    "note": "鋰電池電解液龍頭",
-    "theme": "B"
-  },
-  {
-    "symbol": "6509",
-    "name": "聚和",
-    "layer": 11,
-    "layer_name": "電池材料",
-    "sub_category": "電池化學品",
-    "note": "電池材料特殊化學品",
-    "theme": "B"
-  },
-  {
-    "symbol": "1536",
-    "name": "和大",
-    "layer": 12,
-    "layer_name": "三電傳動",
-    "sub_category": "電動車齒輪箱",
-    "note": "EV減速機/差速器，跨主題：人形機器人",
-    "theme": "B",
-    "themes": [
-      "B",
-      "C"
-    ],
-    "secondary_layers": [
-      21
-    ]
-  },
-  {
-    "symbol": "2351",
-    "name": "順德",
-    "layer": 12,
-    "layer_name": "三電傳動",
-    "sub_category": "精密傳動零件",
-    "note": "EV傳動系統精密零件",
-    "theme": "B"
-  },
-  {
-    "symbol": "2201",
-    "name": "裕隆",
-    "layer": 12,
-    "layer_name": "三電傳動",
-    "sub_category": "整車組裝",
-    "note": "台灣電動車整車廠，Luxgen品牌",
-    "theme": "B"
-  },
-  {
-    "symbol": "3665",
-    "name": "貿聯-KY",
-    "layer": 13,
-    "layer_name": "車用線束",
-    "sub_category": "電動車線束",
-    "note": "EV高壓線束，跨主題：AI伺服器線束",
-    "theme": "B",
-    "themes": [
-      "A",
-      "B"
-    ],
-    "secondary_layers": [
-      5
-    ]
-  },
-  {
-    "symbol": "3023",
-    "name": "信邦",
-    "layer": 13,
-    "layer_name": "車用線束",
-    "sub_category": "車用連接器",
-    "note": "車用線束與連接器",
-    "theme": "B"
-  },
-  {
-    "symbol": "3003",
-    "name": "健和興",
-    "layer": 13,
-    "layer_name": "車用線束",
-    "sub_category": "車用線束",
-    "note": "汽車線束製造商",
-    "theme": "B"
-  },
-  {
-    "symbol": "3552",
-    "name": "同致",
-    "layer": 14,
-    "layer_name": "車燈光學",
-    "sub_category": "車用感測器",
-    "note": "倒車雷達/環景系統供應商",
-    "theme": "B"
-  },
-  {
-    "symbol": "2457",
-    "name": "飛宏",
-    "layer": 15,
-    "layer_name": "充電基建",
-    "sub_category": "EV充電器",
-    "note": "交直流充電樁，切入北美市場",
-    "theme": "B"
-  },
-  {
-    "symbol": "6235",
-    "name": "康舒",
-    "layer": 15,
-    "layer_name": "充電基建",
-    "sub_category": "EV充電模組",
-    "note": "車載充電器OBC",
-    "theme": "B"
-  },
-  {
-    "symbol": "2049",
-    "name": "上銀",
-    "layer": 21,
-    "layer_name": "減速機傳動",
-    "sub_category": "線性傳動/滾珠螺桿",
-    "note": "精密線性傳動龍頭，跨主題：半導體設備",
-    "theme": "C",
-    "themes": [
-      "A",
-      "C"
-    ],
-    "secondary_layers": [
-      1
-    ]
-  },
-  {
-    "symbol": "1597",
-    "name": "直得",
-    "layer": 21,
-    "layer_name": "減速機傳動",
-    "sub_category": "線性模組",
-    "note": "線性滑台與模組",
-    "theme": "C"
-  },
-  {
-    "symbol": "1504",
-    "name": "東元",
-    "layer": 22,
-    "layer_name": "伺服馬達",
-    "sub_category": "工業馬達",
-    "note": "工業用伺服馬達，涵蓋機器人關節",
-    "theme": "C"
-  },
-  {
-    "symbol": "4540",
-    "name": "全球傳動",
-    "layer": 22,
-    "layer_name": "伺服馬達",
-    "sub_category": "滾珠螺桿",
-    "note": "精密滾珠螺桿，工具機+機器人",
-    "theme": "C"
-  },
-  {
-    "symbol": "2359",
-    "name": "所羅門",
-    "layer": 23,
-    "layer_name": "機電整合",
-    "sub_category": "工業機器人",
-    "note": "工業視覺+機器人系統整合",
-    "theme": "C"
-  },
-  {
-    "symbol": "6188",
-    "name": "廣明",
-    "layer": 23,
-    "layer_name": "機電整合",
-    "sub_category": "協作機器人",
-    "note": "Techman協作機器人",
-    "theme": "C",
-    "themes": [
-      "A",
-      "C"
-    ]
-  },
-  {
-    "symbol": "3227",
-    "name": "原相",
-    "layer": 24,
-    "layer_name": "感測末端",
-    "sub_category": "光學感測IC",
-    "note": "AI邊緣感測，機器人視覺",
-    "theme": "C"
-  },
-  {
-    "symbol": "3019",
-    "name": "亞光",
-    "layer": 24,
-    "layer_name": "感測末端",
-    "sub_category": "光學鏡頭",
-    "note": "車用/工業用光學鏡頭，機器人末端視覺",
-    "theme": "C"
+    "theme": "A",
+    "tier": 3,
+    "enabled": true
   }
 ]

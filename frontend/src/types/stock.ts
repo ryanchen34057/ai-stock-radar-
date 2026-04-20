@@ -32,12 +32,52 @@ export interface StockData {
   volume: number | null;
   pe_ratio: number | null;
   market_cap: number | null;
+  eps_current_year: number | null;
+  eps_forward: number | null;
+  forward_pe: number | null;
+  dividend_yield: number | null;      // yfinance %, (fallback)
+  pb_ratio: number | null;            // decimal multiple, e.g. 8.9 = 8.9x
+  roe: number | null;                 // decimal, e.g. 0.3621 = 36.21%
+  revenue_growth: number | null;      // yfinance quarterly YoY (fallback)
+  // FinMind (preferred when present)
+  ttm_eps: number | null;             // sum of latest 4 quarterly basic EPS
+  monthly_revenue_yoy: number | null; // latest month revenue YoY, already percentage
+  ttm_dividend: number | null;        // NTD per share, trailing 12m cash
+  ttm_dividend_yield: number | null;  // percentage (ttm_dividend / current price)
   ma: MAValues;
   klines: KLine[];
   is_20d_high: boolean;
   is_all_time_high: boolean;
   theme: string;
   themes: string[] | null;
+  tier?: number;       // 1=核心, 2=衛星, 3=觀察
+  enabled?: boolean;
+  eps_annual?: EpsAnnualRow[];
+  eps_quarterly?: EpsQuarterlyRow[];
+  disposal?: {
+    symbol: string;
+    name: string;
+    reason: string;
+    measure: string;
+    start_date: string;
+    end_date: string;
+    source: string;
+  } | null;
+}
+
+export type ThemeFilter = 'A' | 'B' | 'C' | 'all' | 'cross';
+export type TierFilter = 1 | 2 | 3; // 1=僅 T1, 2=T1+T2, 3=全部
+
+export interface EpsAnnualRow {
+  year: number;
+  basic_eps: number | null;
+  diluted_eps: number | null;
+}
+
+export interface EpsQuarterlyRow {
+  period_end: string;
+  basic_eps: number | null;
+  diluted_eps: number | null;
 }
 
 export interface DashboardData {
@@ -68,6 +108,12 @@ export interface SpecialFilters {
   allTimeHigh: boolean;        // today close = all-time high
 }
 
+export interface RangeFilter {
+  enabled: boolean;
+  min: number | null;
+  max: number | null;
+}
+
 export interface InstiFilters {
   foreignNetBuy: boolean;    // 外資買超 > 0
   trustNetBuy: boolean;      // 投信買超 > 0
@@ -75,11 +121,27 @@ export interface InstiFilters {
   shortDecreasing: boolean;  // 融券減少 < 0
 }
 
+export interface KDFilters {
+  golden: boolean;      // 今日黃金交叉
+  death: boolean;       // 今日死亡交叉
+  up: boolean;          // K 向上 (無交叉)
+  down: boolean;        // K 向下 (無交叉)
+  oversold: boolean;    // K < 20 (超賣)
+  overbought: boolean;  // K > 80 (超買)
+}
+
 export const LAYER_NAMES: Record<number, string> = {
-  // Theme A
+  // Theme A (ids 1-10, plus 16-19 and 25-26 for later layers that would
+  // otherwise collide with Theme B/C ids)
   1: '晶片設計與製造', 2: '化合物半導體', 3: '記憶體',
   4: 'PCB 載板', 5: 'PCB 主機板', 6: '散熱電源',
   7: '光通訊 CPO', 8: '被動元件', 9: 'ODM 組裝', 10: '電力基礎建設',
+  16: '半導體設備與精密零組件', // Theme A L11
+  17: '特用化學材料',            // Theme A L12
+  18: '機殼滑軌結構件',          // Theme A L13
+  19: '測試封測介面',            // Theme A L14
+  25: '連接器與線材',            // Theme A L15
+  26: '工業電腦邊緣 AI',         // Theme A L16
   // Theme B
   11: '電池材料', 12: '三電傳動', 13: '車用線束', 14: '車燈光學', 15: '充電基建',
   // Theme C
@@ -94,15 +156,22 @@ export const THEME_LABELS: Record<string, string> = {
 
 export const LAYER_THEME: Record<number, string> = {
   1:'A',2:'A',3:'A',4:'A',5:'A',6:'A',7:'A',8:'A',9:'A',10:'A',
+  16:'A',17:'A',18:'A',19:'A',25:'A',26:'A',
   11:'B',12:'B',13:'B',14:'B',15:'B',
   21:'C',22:'C',23:'C',24:'C',
+};
+
+// Display number within theme — for Theme A these are ids 16-19/25-26 that
+// would collide with Theme B/C ids (11-15, 21-24) if we used them directly.
+const LAYER_DISPLAY_NUM: Record<number, number> = {
+  16: 11, 17: 12, 18: 13, 19: 14, 25: 15, 26: 16,
 };
 
 export function layerShortCode(layerId: number): string {
   const theme = LAYER_THEME[layerId];
   if (theme === 'B') return `B-${layerId - 10}`;
   if (theme === 'C') return `C-${layerId - 20}`;
-  return `L${layerId}`;
+  return `L${LAYER_DISPLAY_NUM[layerId] ?? layerId}`;
 }
 
 export const LAYER_ICONS: Record<number, string> = {
@@ -117,6 +186,12 @@ export const LAYER_ICONS: Record<number, string> = {
   8: '🔩',   // 被動元件
   9: '🖥️',   // ODM 組裝
   10: '⚡',  // 電力基礎建設
+  16: '🛠️',  // 半導體設備與精密零組件 (Theme A L11)
+  17: '🧪',  // 特用化學材料 (L12)
+  18: '📦',  // 機殼滑軌結構件 (L13)
+  19: '🔬',  // 測試封測介面 (L14)
+  25: '🧲',  // 連接器與線材 (L15)
+  26: '💻',  // 工業電腦邊緣 AI (L16)
   // Theme B
   11: '🔋',  // 電池材料
   12: '⚙️',  // 三電傳動

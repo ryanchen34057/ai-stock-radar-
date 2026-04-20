@@ -56,6 +56,48 @@ export function useInstitutional() {
   return { data, loading, error, refresh: () => fetchData(true) };
 }
 
+export interface InstitutionalHistoryDay {
+  date: string;  // YYYYMMDD
+  foreign_net: number;
+  trust_net: number;
+  dealer_net: number;
+  total_net: number;
+  margin_balance: number;
+  margin_change: number;
+  short_balance: number;
+  short_change: number;
+}
+
+/** Fetch the last N days of institutional data for one symbol. */
+export function useInstitutionalHistory(symbol: string, days = 20) {
+  const [data, setData] = useState<InstitutionalHistoryDay[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!symbol) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/institutional/history/${symbol}?days=${days}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((json: { history: InstitutionalHistoryDay[] }) => {
+        if (!cancelled) setData(json.history || []);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : '無法取得歷史資料');
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [symbol, days]);
+
+  return { data, loading, error };
+}
+
+
 /** Sum institutional data for a list of symbols. */
 export function aggregateInstitutional(
   symbols: string[],

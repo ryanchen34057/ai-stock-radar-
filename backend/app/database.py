@@ -29,7 +29,11 @@ def init_schema():
                 themes TEXT DEFAULT NULL,
                 industry_role TEXT DEFAULT NULL,
                 secondary_layers TEXT DEFAULT NULL,
-                logo_id TEXT DEFAULT NULL
+                logo_id TEXT DEFAULT NULL,
+                tier INTEGER NOT NULL DEFAULT 2,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE IF NOT EXISTS klines (
@@ -48,6 +52,9 @@ def init_schema():
                 symbol TEXT PRIMARY KEY,
                 pe_ratio REAL,
                 market_cap REAL,
+                eps_current_year REAL,
+                eps_forward REAL,
+                forward_pe REAL,
                 last_updated TEXT,
                 FOREIGN KEY (symbol) REFERENCES stocks(symbol)
             );
@@ -82,6 +89,110 @@ def init_schema():
 
             CREATE INDEX IF NOT EXISTS idx_yt_date ON youtube_mentions(video_date);
 
+            CREATE TABLE IF NOT EXISTS kol_channels (
+                channel_id  TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                enabled     INTEGER NOT NULL DEFAULT 1,
+                created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS kol_videos (
+                video_id          TEXT PRIMARY KEY,
+                channel_id        TEXT NOT NULL,
+                channel_name      TEXT DEFAULT '',
+                title             TEXT DEFAULT '',
+                url               TEXT DEFAULT '',
+                thumbnail         TEXT DEFAULT '',
+                published_at      TEXT DEFAULT '',
+                summary           TEXT DEFAULT '',
+                stocks_json       TEXT DEFAULT '[]',
+                overall_sentiment TEXT DEFAULT 'neutral',
+                summariser        TEXT DEFAULT '',
+                processed_at      TEXT DEFAULT ''
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_kol_videos_pub ON kol_videos(published_at);
+            CREATE INDEX IF NOT EXISTS idx_kol_videos_channel ON kol_videos(channel_id);
+
+            CREATE TABLE IF NOT EXISTS fb_pages (
+                id          TEXT PRIMARY KEY,
+                url         TEXT NOT NULL UNIQUE,
+                name        TEXT DEFAULT '',
+                kind        TEXT DEFAULT 'page',
+                enabled     INTEGER NOT NULL DEFAULT 1,
+                created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS fb_posts (
+                post_id           TEXT PRIMARY KEY,
+                page_id           TEXT NOT NULL,
+                page_name         TEXT DEFAULT '',
+                content           TEXT DEFAULT '',
+                posted_at         TEXT DEFAULT '',
+                url               TEXT DEFAULT '',
+                images_json       TEXT DEFAULT '[]',
+                reactions_count   INTEGER DEFAULT 0,
+                comments_count    INTEGER DEFAULT 0,
+                processed_at      TEXT DEFAULT '',
+                summary           TEXT DEFAULT '',
+                stocks_json       TEXT DEFAULT '[]',
+                overall_sentiment TEXT DEFAULT 'neutral',
+                summariser        TEXT DEFAULT ''
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_fb_posts_page ON fb_posts(page_id);
+            CREATE INDEX IF NOT EXISTS idx_fb_posts_posted ON fb_posts(posted_at);
+
+            CREATE TABLE IF NOT EXISTS disposed_stocks (
+                symbol      TEXT NOT NULL,
+                name        TEXT DEFAULT '',
+                reason      TEXT DEFAULT '',
+                measure     TEXT DEFAULT '',
+                start_date  TEXT NOT NULL,
+                end_date    TEXT NOT NULL,
+                source      TEXT DEFAULT '',
+                fetched_at  TEXT DEFAULT '',
+                PRIMARY KEY (symbol, start_date, end_date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_disposed_dates ON disposed_stocks(start_date, end_date);
+
+            CREATE TABLE IF NOT EXISTS eps_annual (
+                symbol      TEXT,
+                year        INTEGER,
+                basic_eps   REAL,
+                diluted_eps REAL,
+                PRIMARY KEY (symbol, year),
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol)
+            );
+
+            CREATE TABLE IF NOT EXISTS eps_quarterly (
+                symbol      TEXT,
+                period_end  TEXT,
+                basic_eps   REAL,
+                diluted_eps REAL,
+                PRIMARY KEY (symbol, period_end),
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol)
+            );
+
+            CREATE TABLE IF NOT EXISTS monthly_revenue (
+                symbol  TEXT,
+                year    INTEGER,
+                month   INTEGER,
+                revenue INTEGER,
+                PRIMARY KEY (symbol, year, month),
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol)
+            );
+
+            CREATE TABLE IF NOT EXISTS dividends (
+                symbol TEXT,
+                date   TEXT,
+                cash   REAL,
+                stock  REAL,
+                PRIMARY KEY (symbol, date),
+                FOREIGN KEY (symbol) REFERENCES stocks(symbol)
+            );
+
             CREATE TABLE IF NOT EXISTS institutional_cache (
                 symbol      TEXT,
                 date        TEXT,
@@ -103,6 +214,16 @@ def init_schema():
         if "sentiment" not in existing_cols:
             conn.execute("ALTER TABLE youtube_mentions ADD COLUMN sentiment TEXT NOT NULL DEFAULT 'neutral'")
             conn.commit()
+        existing_fb_cols = {row[1] for row in conn.execute("PRAGMA table_info(fb_posts)").fetchall()}
+        for col, ddl in [
+            ("summary",           "TEXT DEFAULT ''"),
+            ("stocks_json",       "TEXT DEFAULT '[]'"),
+            ("overall_sentiment", "TEXT DEFAULT 'neutral'"),
+            ("summariser",        "TEXT DEFAULT ''"),
+        ]:
+            if col not in existing_fb_cols:
+                conn.execute(f"ALTER TABLE fb_posts ADD COLUMN {col} {ddl}")
+                conn.commit()
         existing_stock_cols = {row[1] for row in conn.execute("PRAGMA table_info(stocks)").fetchall()}
         if "theme" not in existing_stock_cols:
             conn.execute("ALTER TABLE stocks ADD COLUMN theme TEXT NOT NULL DEFAULT 'A'")
@@ -118,6 +239,31 @@ def init_schema():
             conn.commit()
         if "logo_id" not in existing_stock_cols:
             conn.execute("ALTER TABLE stocks ADD COLUMN logo_id TEXT DEFAULT NULL")
+            conn.commit()
+        existing_meta_cols = {row[1] for row in conn.execute("PRAGMA table_info(metadata)").fetchall()}
+        for col in ("eps_current_year", "eps_forward", "forward_pe",
+                    "dividend_yield", "pb_ratio", "roe", "revenue_growth",
+                    "ttm_eps", "monthly_revenue_yoy",
+                    "ttm_dividend", "ttm_dividend_yield"):
+            if col not in existing_meta_cols:
+                conn.execute(f"ALTER TABLE metadata ADD COLUMN {col} REAL")
+                conn.commit()
+        # v1.3 — tier / enabled / timestamps on stocks table
+        if "tier" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN tier INTEGER NOT NULL DEFAULT 2")
+            conn.commit()
+        if "enabled" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+            conn.commit()
+        if "created_at" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN created_at TEXT")
+            conn.commit()
+        if "updated_at" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN updated_at TEXT")
+            conn.commit()
+        existing_kol_cols = {row[1] for row in conn.execute("PRAGMA table_info(kol_videos)").fetchall()}
+        if existing_kol_cols and "summariser" not in existing_kol_cols:
+            conn.execute("ALTER TABLE kol_videos ADD COLUMN summariser TEXT DEFAULT ''")
             conn.commit()
     finally:
         conn.close()

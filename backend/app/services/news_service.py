@@ -191,6 +191,133 @@ def _fetch_google_news(symbol: str, name: str) -> list[dict]:
 
 # ── External links ────────────────────────────────────────────────────────────
 
+# ── Capacity analysis ─────────────────────────────────────────────────────────
+
+# Keywords used to surface capacity-related items from already-cached MOPS +
+# news data. Taiwanese filings use both 繁體 variants and 半形 / 全形 mixes.
+CAPACITY_KEYWORDS = [
+    "產能", "產線", "擴產", "增產", "月產能", "年產能", "產能利用率",
+    "稼動率", "新廠", "廠房", "新廠區", "量產", "試產", "投產", "動土",
+    "竣工", "機台", "設備採購", "資本支出", "CapEx", "擴建",
+    "法說會", "法人說明會", "年報",
+]
+
+
+def _contains_capacity_kw(text: str) -> str | None:
+    """Return the first matched capacity keyword, or None."""
+    for kw in CAPACITY_KEYWORDS:
+        if kw in text:
+            return kw
+    return None
+
+
+def get_capacity_analysis(symbol: str, name: str, conn) -> dict:
+    """
+    Build a capacity-analysis bundle for a single stock:
+    - capacity_mops: MOPS announcements whose title mentions capacity keywords
+    - capacity_news: Google News items with capacity keywords
+    - primary_sources: direct links to authoritative sources (法說會, 年報, IR)
+
+    Reads from the existing news_cache table — does not hit the network here,
+    so it's instant. The caches are already populated by `refresh_all_news`.
+    """
+    cache = conn.execute(
+        "SELECT mops_json, news_json FROM news_cache WHERE symbol = ?",
+        (symbol,),
+    ).fetchone()
+    mops: list[dict] = []
+    news: list[dict] = []
+    if cache:
+        try:
+            mops = json.loads(cache["mops_json"] or "[]")
+        except Exception:
+            mops = []
+        try:
+            news = json.loads(cache["news_json"] or "[]")
+        except Exception:
+            news = []
+
+    capacity_mops = []
+    for m in mops:
+        kw = _contains_capacity_kw(m.get("title", ""))
+        if kw:
+            capacity_mops.append({**m, "matched_keyword": kw})
+
+    capacity_news = []
+    for n in news:
+        kw = _contains_capacity_kw(n.get("title", ""))
+        if kw:
+            capacity_news.append({**n, "matched_keyword": kw})
+
+    primary_sources = _capacity_primary_sources(symbol, name)
+
+    return {
+        "capacity_mops": capacity_mops,
+        "capacity_news": capacity_news,
+        "primary_sources": primary_sources,
+    }
+
+
+def _capacity_primary_sources(symbol: str, name: str) -> list[dict]:
+    """
+    Links to the four authoritative channels for Taiwan-stock capacity info:
+    法說會 (投資人說明會) | 年報 | YouTube 法說會 | 鉅亨/Goodinfo 產業資訊
+    """
+    enc_name = urllib.parse.quote(name)
+    yt_query = urllib.parse.quote(f"{name} 法說會")
+    gn_capacity = urllib.parse.quote(f"{name} {symbol} 產能")
+    return [
+        {
+            "category": "法說會",
+            "name": "MOPS 法說會資訊",
+            "desc": "發言 / 簡報 PDF / 影音連結",
+            "url": f"https://mops.twse.com.tw/mops/web/t100sb02_1?step=1&TYPEK=sii&CO_ID={symbol}",
+        },
+        {
+            "category": "法說會",
+            "name": "YouTube 法說會搜尋",
+            "desc": "公司自行上傳或券商直播",
+            "url": f"https://www.youtube.com/results?search_query={yt_query}",
+        },
+        {
+            "category": "年報",
+            "name": "MOPS 年報 / 財報",
+            "desc": "營運概況章節含各廠區月產能",
+            "url": f"https://mops.twse.com.tw/mops/web/t57sb01_q1?step=1&TYPEK=sii&CO_ID={symbol}",
+        },
+        {
+            "category": "年報",
+            "name": "MOPS 重大訊息總覽",
+            "desc": "新廠動土 / 量產 / 重大資本支出",
+            "url": f"https://mops.twse.com.tw/mops/web/t05st01?firstin=1&TYPEK=all&encno={symbol}&step=1",
+        },
+        {
+            "category": "產業研究",
+            "name": "鉅亨網 個股頁",
+            "desc": "新聞匯整 + 分析師報告摘要",
+            "url": f"https://www.cnyes.com/twstock/{symbol}",
+        },
+        {
+            "category": "產業研究",
+            "name": "Goodinfo 經營績效",
+            "desc": "毛利率 / 產能利用率趨勢",
+            "url": f"https://goodinfo.tw/tw/StockBzPerformance.asp?STOCK_ID={symbol}",
+        },
+        {
+            "category": "產業研究",
+            "name": "Google News 產能搜尋",
+            "desc": f"關鍵字：{name} 產能",
+            "url": f"https://news.google.com/search?q={gn_capacity}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+        },
+        {
+            "category": "產業研究",
+            "name": "MoneyDJ 個股新聞",
+            "desc": "法人觀點整理",
+            "url": f"https://www.moneydj.com/kmdj/search/default.aspx?_Query_={enc_name}",
+        },
+    ]
+
+
 def _external_links(symbol: str, name: str) -> list[dict]:
     gq = urllib.parse.quote(f"{name} {symbol} 股票")
     return [
@@ -202,6 +329,53 @@ def _external_links(symbol: str, name: str) -> list[dict]:
 
 
 # ── Public interface ──────────────────────────────────────────────────────────
+
+def refresh_one_stalest(conn) -> dict:
+    """
+    Scrape MOPS + Google News for the single stock whose cache is oldest
+    (or missing entirely). Returns the refreshed stock's metadata.
+
+    This is the per-poll refresh unit used by the frontend's trickle feed —
+    gentle on external sources and always brings one fresh batch each tick.
+    """
+    # Prefer stocks with NO cache row at all, then the oldest cached one.
+    row = conn.execute(
+        """SELECT s.symbol, s.name, c.fetched_at
+           FROM stocks s
+           LEFT JOIN news_cache c ON s.symbol = c.symbol
+           ORDER BY (c.fetched_at IS NULL) DESC, c.fetched_at ASC
+           LIMIT 1"""
+    ).fetchone()
+    if not row:
+        return {"status": "empty"}
+
+    symbol = row["symbol"]
+    name = row["name"]
+    prev = row["fetched_at"]
+
+    try:
+        mops = _fetch_mops(symbol)
+        time.sleep(random.uniform(0.4, 0.9))
+        gnews = _fetch_google_news(symbol, name)
+        conn.execute(
+            """INSERT OR REPLACE INTO news_cache (symbol, fetched_at, mops_json, news_json)
+               VALUES (?, ?, ?, ?)""",
+            (symbol, datetime.now().isoformat(), json.dumps(mops), json.dumps(gnews)),
+        )
+        conn.commit()
+        logger.info(f"refresh_one_stalest: {symbol} {name} (prev={prev}) mops={len(mops)} news={len(gnews)}")
+        return {
+            "status": "ok",
+            "symbol": symbol,
+            "name": name,
+            "prev_fetched_at": prev,
+            "mops_count": len(mops),
+            "news_count": len(gnews),
+        }
+    except Exception as e:
+        logger.warning(f"refresh_one_stalest {symbol}: {e}")
+        return {"status": "error", "symbol": symbol, "error": str(e)}
+
 
 def refresh_all_news(conn, skip_fresh_hours: int = 6, sleep_between: float = 1.0):
     """
@@ -246,8 +420,9 @@ def get_aggregated_feed(conn, limit: int = 150) -> list[dict]:
     Each item includes the stock symbol + name for context.
     """
     rows = conn.execute(
-        "SELECT s.symbol, s.name, c.news_json FROM news_cache c "
-        "JOIN stocks s ON s.symbol = c.symbol"
+        "SELECT s.symbol, s.name, s.sub_category, s.note, s.layer_name, s.tier, "
+        "c.news_json FROM news_cache c "
+        "JOIN stocks s ON s.symbol = c.symbol WHERE s.enabled = 1"
     ).fetchall()
 
     items: list[dict] = []
@@ -265,6 +440,10 @@ def get_aggregated_feed(conn, limit: int = 150) -> list[dict]:
             items.append({
                 "stock_symbol": row["symbol"],
                 "stock_name": row["name"],
+                "sub_category": row["sub_category"],
+                "layer_name": row["layer_name"],
+                "note": row["note"],
+                "tier": row["tier"] if "tier" in row.keys() else None,
                 "date": n.get("date", ""),
                 "title": n.get("title", ""),
                 "source": n.get("source", ""),

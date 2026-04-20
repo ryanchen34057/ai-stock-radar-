@@ -56,17 +56,30 @@ def _fetch_twse_institutional(date: str) -> dict:
         if data.get("stat") != "OK":
             return {}
         result = {}
+        skipped = 0
         for row in data.get("data", []):
-            sym = row[0].strip()
-            # Combine 外陸資 + 外資自營商 as "外資"
-            foreign = _parse_int(row[4]) + _parse_int(row[7])
-            result[sym] = {
-                "foreign_net": foreign,
-                "trust_net":   _parse_int(row[10]),
-                "dealer_net":  _parse_int(row[11]),
-                "total_net":   _parse_int(row[18]),
-            }
-        logger.info(f"TWSE institutional {date}: {len(result)} stocks")
+            # Per-row try/except — one malformed row (shorter columns, non-
+            # numeric, header residue) shouldn't kill the whole dict.
+            try:
+                sym = row[0].strip()
+                if not sym:
+                    continue
+                # Combine 外陸資 + 外資自營商 as "外資"
+                foreign = _parse_int(row[4]) + _parse_int(row[7])
+                result[sym] = {
+                    "foreign_net": foreign,
+                    "trust_net":   _parse_int(row[10]),
+                    "dealer_net":  _parse_int(row[11]),
+                    # row[18] = 三大法人合計 (19-col schema). If TWSE temporarily
+                    # truncates columns, fall back to computing the sum.
+                    "total_net":   _parse_int(row[18]) if len(row) > 18
+                                   else foreign + _parse_int(row[10]) + _parse_int(row[11]),
+                }
+            except (IndexError, ValueError, AttributeError) as row_err:
+                skipped += 1
+                if skipped <= 3:  # only log first few
+                    logger.debug(f"TWSE T86 bad row ({date}): {row_err} row={row[:3] if row else []}")
+        logger.info(f"TWSE institutional {date}: {len(result)} stocks ({skipped} rows skipped)")
         return result
     except Exception as e:
         logger.warning(f"TWSE institutional error ({date}): {e}")
@@ -102,15 +115,21 @@ def _fetch_tpex_institutional(date: str) -> dict:
         rows = (data.get("tables", [{}])[0].get("data")
                 if data.get("tables") else data.get("aaData", []))
         result = {}
+        skipped = 0
         for row in rows or []:
-            sym = str(row[0]).strip()
-            result[sym] = {
-                "foreign_net": _parse_int(row[10]),  # 外資合計
-                "trust_net":   _parse_int(row[13]),  # 投信
-                "dealer_net":  _parse_int(row[22]),  # 自營商合計
-                "total_net":   _parse_int(row[23]),  # 三大法人合計
-            }
-        logger.info(f"TPEx institutional {date}: {len(result)} stocks")
+            try:
+                sym = str(row[0]).strip()
+                if not sym:
+                    continue
+                result[sym] = {
+                    "foreign_net": _parse_int(row[10]),
+                    "trust_net":   _parse_int(row[13]),
+                    "dealer_net":  _parse_int(row[22]),
+                    "total_net":   _parse_int(row[23]),
+                }
+            except (IndexError, ValueError, AttributeError):
+                skipped += 1
+        logger.info(f"TPEx institutional {date}: {len(result)} stocks ({skipped} rows skipped)")
         return result
     except Exception as e:
         logger.warning(f"TPEx institutional error ({date}): {e}")
@@ -195,6 +214,117 @@ def _fetch_tpex_margin(date: str) -> dict:
 
 # ── Public interface ──────────────────────────────────────────────────────────
 
+def _recent_weekdays(n: int, end_date: str | None = None) -> list[str]:
+    """Return the last N weekdays (YYYYMMDD), most recent first."""
+    end = datetime.strptime(end_date, "%Y%m%d") if end_date else datetime.now()
+    out = []
+    d = end
+    while len(out) < n:
+        if d.weekday() < 5:
+            out.append(d.strftime("%Y%m%d"))
+        d -= timedelta(days=1)
+    return out
+
+
+def backfill_institutional_history(days: int = 20) -> dict:
+    """
+    Fetch the last N weekdays of TWSE + TPEx institutional + margin data and
+    write each day's rows to institutional_cache. Skips days we already have
+    complete rows for to avoid hammering TWSE.
+    """
+    from app.database import get_connection
+    target_dates = _recent_weekdays(days)
+    fetched_days = 0
+    skipped_days = 0
+    written_rows = 0
+
+    for d in target_dates:
+        conn = get_connection()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM institutional_cache WHERE date = ?", (d,)
+            ).fetchone()
+            n_existing = row["n"] if row else 0
+        finally:
+            conn.close()
+        # Already cached — skip (TWSE numbers for past days don't change)
+        if n_existing > 100:
+            skipped_days += 1
+            continue
+
+        twse_i  = _fetch_twse_institutional(d)
+        tpex_i  = _fetch_tpex_institutional(d)
+        twse_m  = _fetch_twse_margin(d)
+        tpex_m  = _fetch_tpex_margin(d)
+
+        # Skip days with no TWSE data (weekend / holiday / pre-publication)
+        if not twse_i and not tpex_i:
+            continue
+        fetched_days += 1
+
+        insti  = {**twse_i, **tpex_i}
+        margin = {**twse_m, **tpex_m}
+        covered = set(insti) | set(margin)
+
+        rows = []
+        for sym in covered:
+            d_insti  = insti.get(sym,  {"foreign_net": 0, "trust_net": 0,
+                                        "dealer_net": 0, "total_net": 0})
+            d_margin = margin.get(sym, {"margin_balance": 0, "margin_change": 0,
+                                        "short_balance": 0, "short_change": 0})
+            rows.append((sym, d,
+                         d_insti["foreign_net"],  d_insti["trust_net"],
+                         d_insti["dealer_net"],   d_insti["total_net"],
+                         d_margin["margin_balance"], d_margin["margin_change"],
+                         d_margin["short_balance"],  d_margin["short_change"]))
+
+        conn = get_connection()
+        try:
+            conn.executemany(
+                """INSERT OR REPLACE INTO institutional_cache
+                   (symbol, date, foreign_net, trust_net, dealer_net, total_net,
+                    margin_balance, margin_change, short_balance, short_change)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                rows,
+            )
+            conn.commit()
+            written_rows += len(rows)
+        finally:
+            conn.close()
+
+        # Be polite to TWSE/TPEx
+        import time
+        time.sleep(1.5)
+
+    logger.info(f"institutional backfill: {fetched_days} days fetched, "
+                f"{skipped_days} days already cached, {written_rows} rows written")
+    return {
+        "days_requested": days,
+        "days_fetched": fetched_days,
+        "days_skipped": skipped_days,
+        "rows_written": written_rows,
+    }
+
+
+def get_history(symbol: str, days: int = 20) -> list[dict]:
+    """Read per-day history for one symbol from institutional_cache."""
+    from app.database import get_connection
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT date, foreign_net, trust_net, dealer_net, total_net,
+                      margin_balance, margin_change, short_balance, short_change
+               FROM institutional_cache
+               WHERE symbol = ?
+               ORDER BY date DESC
+               LIMIT ?""",
+            (symbol, days),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_institutional_data(date: str | None = None) -> dict:
     """
     Return merged TWSE + TPEx institutional + margin data indexed by symbol.
@@ -249,4 +379,11 @@ def get_institutional_data(date: str | None = None) -> dict:
                                 "short_balance": 0, "short_change": 0}),
         }
 
-    return {"date": target, "stocks": merged}
+    return {
+        "date": target,
+        "stocks": merged,
+        # Caller uses this to avoid overwriting cache with zero-filled defaults
+        # (e.g. when TWSE T86 fails but margin endpoint succeeds)
+        "insti_covered":  sorted(insti.keys()),
+        "margin_covered": sorted(margin.keys()),
+    }

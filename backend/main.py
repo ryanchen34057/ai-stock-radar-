@@ -8,13 +8,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 import pytz
 
 from app.database import init_schema, load_settings_to_env, DB_PATH, get_connection
 from app.api.routes import router
-from app.services.stock_service import seed_stocks_table, update_all_stocks, fetch_missing_klines, fetch_logos_from_tradingview
+from app.services.stock_service import seed_stocks_table, update_all_stocks, fetch_missing_klines, fetch_logos_from_tradingview, ensure_klines_current, ensure_eps_current
 from app.services.youtube_service import run_youtube_pipeline
 from app.services.news_service import refresh_all_news
+from app.services.finmind_service import ensure_finmind_current
+from app.services.disposal_service import ensure_disposal_current, refresh_disposal_list
+from app.services.institutional_service import backfill_institutional_history
+from app.services import setup_progress
+from app.services import fb_service, kol_service, twse_mis_service
 
 logging.basicConfig(
     level=logging.INFO,
@@ -35,15 +41,46 @@ async def lifespan(app: FastAPI):
     load_settings_to_env()
     seed_stocks_table()
 
-    # Auto-fetch klines for any stock with incomplete data (background, non-blocking).
-    # min_rows=1000 catches both "no klines" AND "only a few rows from daily update".
-    # The IPO-date check inside fetch_missing_klines skips genuinely newly-listed stocks,
-    # so we don't re-fetch them every startup.
-    threading.Thread(
-        target=fetch_missing_klines,
-        kwargs={"period": "5y", "min_rows": 1000},
-        daemon=True,
-    ).start()
+    # Startup sweep: bring every stock up to today, then fill in EPS. Runs
+    # serially in one background thread — parallel yfinance calls get rate-limited.
+    def _startup_data_sweep():
+        setup_progress.begin_sweep()
+        try:
+            setup_progress.begin("klines")
+            ensure_klines_current(backfill_period="5y")
+            setup_progress.mark_phase_done("klines")
+        except Exception as e:
+            logger.error(f"ensure_klines_current failed: {e}")
+            setup_progress.report_error(f"K 線抓取失敗：{e}")
+        try:
+            setup_progress.begin("eps")
+            ensure_eps_current()
+            setup_progress.mark_phase_done("eps")
+        except Exception as e:
+            logger.error(f"ensure_eps_current failed: {e}")
+            setup_progress.report_error(f"EPS 抓取失敗：{e}")
+        try:
+            setup_progress.begin("finmind")
+            ensure_finmind_current(stale_hours=24.0)
+            setup_progress.mark_phase_done("finmind")
+        except Exception as e:
+            logger.error(f"ensure_finmind_current failed: {e}")
+            setup_progress.report_error(f"FinMind 抓取失敗：{e}")
+        try:
+            setup_progress.begin("disposal")
+            ensure_disposal_current(max_age_hours=12.0)
+            setup_progress.mark_phase_done("disposal")
+        except Exception as e:
+            logger.error(f"ensure_disposal_current failed: {e}")
+        try:
+            setup_progress.begin("institutional")
+            backfill_institutional_history(days=20)
+            setup_progress.mark_phase_done("institutional")
+        except Exception as e:
+            logger.error(f"institutional backfill failed: {e}")
+        setup_progress.mark_all_done()
+
+    threading.Thread(target=_startup_data_sweep, daemon=True).start()
 
     # Fetch missing logos from TradingView (fast — single API call)
     threading.Thread(target=fetch_logos_from_tradingview, daemon=True).start()
@@ -72,6 +109,31 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
 
+    # Monthly revenue reports are published by the 10th of each month — run
+    # FinMind sweep daily at 20:00 so fresh reports surface the same evening.
+    scheduler.add_job(
+        lambda: ensure_finmind_current(stale_hours=0.0),
+        CronTrigger(hour=20, minute=0, timezone="Asia/Taipei"),
+        id="daily_finmind",
+        replace_existing=True,
+    )
+
+    # 處置股公告通常在盤前更新，07:30 拉一次即可涵蓋當日
+    scheduler.add_job(
+        lambda: refresh_disposal_list(),
+        CronTrigger(hour=7, minute=30, timezone="Asia/Taipei"),
+        id="daily_disposal",
+        replace_existing=True,
+    )
+
+    # 三大法人 / 融資融券 — 台股盤後 16:00 ~ 16:30 publish，17:30 拉一次補到 cache
+    scheduler.add_job(
+        lambda: backfill_institutional_history(days=3),
+        CronTrigger(hour=17, minute=30, timezone="Asia/Taipei"),
+        id="daily_institutional",
+        replace_existing=True,
+    )
+
     # Schedule YouTube pipeline at 18:30 Taipei time (show uploads ~18:00)
     def _yt_job():
         conn = get_connection()
@@ -88,8 +150,54 @@ async def lifespan(app: FastAPI):
         id="youtube_pipeline",
         replace_existing=True,
     )
+
+    # ── Rolling auto-refresh ──────────────────────────────────────────────
+    # Cheap "is there anything new?" polls. Each service's refresh function
+    # already short-circuits when nothing has changed (FB skips already-
+    # analysed posts; KOL skips already-summarised videos; stocks use the
+    # incremental path). So the cost when nothing is new is near-zero.
+
+    # FB every 15 min — Playwright is heavy (~30s, ~300MB RAM) and FB will
+    # throttle faster cadence.
+    scheduler.add_job(
+        lambda: fb_service.refresh_all_pages(days=7),
+        IntervalTrigger(minutes=15, timezone="Asia/Taipei"),
+        id="fb_poll",
+        replace_existing=True,
+        max_instances=1,       # never run two at once
+        coalesce=True,         # if missed (laptop asleep), run once on wake
+    )
+
+    # KOL every 5 min — YouTube API calls are cheap (1 unit per channel);
+    # NotebookLM only fires on brand-new videos.
+    scheduler.add_job(
+        lambda: kol_service.refresh_all_kol_feeds(days=7),
+        IntervalTrigger(minutes=5, timezone="Asia/Taipei"),
+        id="kol_poll",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Stocks every 5 min during TW market hours (09:00–13:30, Mon–Fri).
+    # Uses TWSE MIS for true real-time intraday prices (yfinance doesn't
+    # reliably give intraday bars for TW stocks during session).
+    scheduler.add_job(
+        lambda: twse_mis_service.refresh_all_quotes(),
+        CronTrigger(day_of_week="mon-fri", hour="9-13", minute="*/5",
+                    timezone="Asia/Taipei"),
+        id="stocks_intraday_mis",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # Also do one MIS pull at startup so the dashboard shows live prices
+    # immediately (if we're inside market hours).
+    threading.Thread(target=twse_mis_service.refresh_all_quotes, daemon=True).start()
+
     scheduler.start()
-    logger.info("APScheduler started – stock update 18:00 / YouTube 18:30 Asia/Taipei")
+    logger.info("APScheduler started – FB 15min / KOL 5min / stocks 5min (mkt hrs) / daily jobs 18:00+")
 
     yield
 

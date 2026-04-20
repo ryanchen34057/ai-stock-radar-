@@ -1,4 +1,6 @@
-import type { MAPeriod, AlertFilter, SortBy, SpecialFilters, InstiFilters } from '../types/stock';
+import { useState } from 'react';
+import type { MAPeriod, AlertFilter, SortBy, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter } from '../types/stock';
+import { StockManager } from './StockManager';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStockData } from '../hooks/useStockData';
 import { formatDate } from '../utils/formatters';
@@ -25,6 +27,59 @@ function FilterPill({
   );
 }
 
+function RangeRow({
+  label, unit, step, filter, onChange,
+}: {
+  label: string;
+  unit: string;
+  step: number;
+  filter: RangeFilter;
+  onChange: (f: RangeFilter) => void;
+}) {
+  const parse = (s: string): number | null => {
+    const t = s.trim();
+    if (t === '') return null;
+    const n = parseFloat(t);
+    return isNaN(n) ? null : n;
+  };
+  const active = filter.enabled && (filter.min !== null || filter.max !== null);
+  return (
+    <div className="flex items-center gap-1.5">
+      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={filter.enabled}
+          onChange={(e) => onChange({ ...filter, enabled: e.target.checked })}
+          className="accent-accent w-3.5 h-3.5"
+        />
+        <span className={`text-sm font-semibold ${active ? 'text-accent' : 'text-white'}`}>{label}</span>
+      </label>
+      <input
+        type="number" step={step} min={0}
+        placeholder="最小"
+        disabled={!filter.enabled}
+        value={filter.min ?? ''}
+        onChange={(e) => onChange({ ...filter, min: parse(e.target.value) })}
+        className="w-20 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                   text-center focus:outline-none focus:border-accent
+                   disabled:opacity-40 disabled:cursor-not-allowed"
+      />
+      <span className="text-xs text-text-t">~</span>
+      <input
+        type="number" step={step} min={0}
+        placeholder="最大"
+        disabled={!filter.enabled}
+        value={filter.max ?? ''}
+        onChange={(e) => onChange({ ...filter, max: parse(e.target.value) })}
+        className="w-20 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                   text-center focus:outline-none focus:border-accent
+                   disabled:opacity-40 disabled:cursor-not-allowed"
+      />
+      <span className="text-xs text-text-t">{unit}</span>
+    </div>
+  );
+}
+
 export function ControlBar() {
   const {
     selectedMA, setSelectedMA,
@@ -32,6 +87,11 @@ export function ControlBar() {
     maProximityFilter, setMAProximityFilter,
     specialFilters, setSpecialFilters,
     instiFilters, setInstiFilters,
+    priceFilter, setPriceFilter,
+    peFilter, setPeFilter,
+    kdFilters, setKDFilters,
+    themeFilter, setThemeFilter,
+    searchQuery, setSearchQuery,
     sortBy, setSortBy,
     darkMode, toggleDarkMode,
     lastUpdated, loading,
@@ -44,11 +104,75 @@ export function ControlBar() {
   const toggleIF = (key: keyof InstiFilters) =>
     setInstiFilters({ ...instiFilters, [key]: !instiFilters[key] });
 
+  const toggleKD = (key: keyof KDFilters) =>
+    setKDFilters({ ...kdFilters, [key]: !kdFilters[key] });
+
   const anySpecial = Object.values(specialFilters).some(Boolean);
   const anyInsti = Object.values(instiFilters).some(Boolean);
+  const anyKD = Object.values(kdFilters).some(Boolean);
+
+  const [managerOpen, setManagerOpen] = useState(false);
+
+  const THEME_BTNS: { val: ThemeFilter; label: string; icon: string }[] = [
+    { val: 'all',   label: '全部',          icon: '🔀' },
+    { val: 'A',     label: 'AI 產業鏈',     icon: '🎯' },
+    { val: 'B',     label: '電動車',        icon: '🚗' },
+    { val: 'C',     label: '機器人',        icon: '🤖' },
+    { val: 'cross', label: '跨主題精選',    icon: '⭐' },
+  ];
 
   return (
     <div className="bg-card-bg border-b border-border-c px-4 py-3 space-y-2.5">
+
+      {/* ── Row 0: search + theme + stock manager ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex items-center">
+          <span className="absolute left-2 text-text-t text-xs pointer-events-none">🔍</span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜尋代號或名稱..."
+            className="w-56 bg-dash-bg border border-border-c rounded pl-7 pr-7 py-1.5 text-xs text-text-p
+                       placeholder:text-text-t focus:outline-none focus:border-accent font-mono"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 text-text-t hover:text-text-p text-xs"
+              title="清除搜尋"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <span className="text-sm font-semibold text-white ml-2">主題:</span>
+        {THEME_BTNS.map((b) => (
+          <button
+            key={b.val}
+            onClick={() => setThemeFilter(b.val)}
+            className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+              themeFilter === b.val
+                ? 'bg-accent text-white border-accent font-semibold'
+                : 'border-border-c bg-card-bg text-text-s hover:text-text-p'
+            }`}
+            title={b.label}
+          >
+            {b.icon} {b.label}
+          </button>
+        ))}
+
+        <button
+          onClick={() => setManagerOpen(true)}
+          className="ml-auto px-3 py-1 text-xs rounded border border-border-c text-text-s
+                     hover:text-accent hover:border-accent transition-colors"
+          title="新增 / 編輯 / 停用股票"
+        >
+          ⚙ 股票管理
+        </button>
+      </div>
+
+      {managerOpen && <StockManager onClose={() => setManagerOpen(false)} />}
 
       {/* ── Row 1: core controls ── */}
       <div className="flex flex-wrap items-center gap-3">
@@ -210,6 +334,53 @@ export function ControlBar() {
         <FilterPill active={specialFilters.allTimeHigh} onClick={() => toggleSF('allTimeHigh')}
           activeClass="bg-yellow-500/20 text-yellow-400 border-yellow-500/50">
           收盤創歷史新高 ATH
+        </FilterPill>
+      </div>
+
+      {/* ── Row 3b: price & PE range filters ── */}
+      <div className="flex flex-wrap items-center gap-4">
+        <RangeRow
+          label="股價"
+          unit="NT$"
+          step={0.5}
+          filter={priceFilter}
+          onChange={setPriceFilter}
+        />
+        <RangeRow
+          label="本益比"
+          unit="x"
+          step={0.5}
+          filter={peFilter}
+          onChange={setPeFilter}
+        />
+      </div>
+
+      {/* ── Row 3c: KD (5,3,3) trend filters ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`text-sm font-semibold ${anyKD ? 'text-accent' : 'text-white'}`}>KD(5,3,3):</span>
+        <FilterPill active={kdFilters.golden} onClick={() => toggleKD('golden')}
+          activeClass="bg-tw-down/20 text-tw-down border-tw-down/50">
+          黃金交叉
+        </FilterPill>
+        <FilterPill active={kdFilters.death} onClick={() => toggleKD('death')}
+          activeClass="bg-tw-up/20 text-tw-up border-tw-up/50">
+          死亡交叉
+        </FilterPill>
+        <FilterPill active={kdFilters.up} onClick={() => toggleKD('up')}
+          activeClass="bg-tw-down/10 text-tw-down border-tw-down/30">
+          K 向上
+        </FilterPill>
+        <FilterPill active={kdFilters.down} onClick={() => toggleKD('down')}
+          activeClass="bg-tw-up/10 text-tw-up border-tw-up/30">
+          K 向下
+        </FilterPill>
+        <FilterPill active={kdFilters.oversold} onClick={() => toggleKD('oversold')}
+          activeClass="bg-accent/20 text-accent border-accent/50">
+          超賣 K&lt;20
+        </FilterPill>
+        <FilterPill active={kdFilters.overbought} onClick={() => toggleKD('overbought')}
+          activeClass="bg-yellow-500/20 text-yellow-400 border-yellow-500/50">
+          超買 K&gt;80
         </FilterPill>
       </div>
 

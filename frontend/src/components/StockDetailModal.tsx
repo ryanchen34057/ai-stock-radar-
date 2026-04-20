@@ -2,11 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import type { StockData, KLine, MAPeriod } from '../types/stock';
 import { calculateMAFull } from '../utils/calcMA';
+import { calculateKD, getKDTrend, kdTrendLabel } from '../utils/calcKD';
 import { formatPrice, formatChange, formatChangePct, formatVolume, formatMarketCap } from '../utils/formatters';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStockNews } from '../hooks/useStockNews';
-import { useInstitutional } from '../hooks/useInstitutional';
+import { useInstitutional, useInstitutionalHistory, type InstitutionalHistoryDay } from '../hooks/useInstitutional';
 import type { MopsAnnouncement, NewsItem, ExternalLink } from '../hooks/useStockNews';
+import PeTooltip from './PeTooltip';
+import { getDisplayPe } from '../utils/formatPe';
+import CapacitySection from './CapacitySection';
 
 const MA_COLORS: Record<number, string> = {
   5: '#58A6FF',
@@ -40,8 +44,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
   const [loadingKlines, setLoadingKlines] = useState(true);
   const [rangeIndex, setRangeIndex] = useState(2); // default 1年
   const { data: news, loading: newsLoading } = useStockNews(stock.symbol);
-  const { data: instiData } = useInstitutional();
-  const insti = instiData?.stocks[stock.symbol];
+  useInstitutional(); // keep the shared 1-day fetch warm for aggregates elsewhere
 
   // Fetch full 5-year klines when modal opens
   useEffect(() => {
@@ -78,7 +81,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
     const container = chartRef.current;
     const chart = createChart(container, {
       autoSize: true,
-      height: 340,
+      height: 460,
       layout: {
         background: { type: ColorType.Solid, color: darkMode ? '#0D1117' : '#FFFFFF' },
         textColor: darkMode ? '#8B949E' : '#555',
@@ -88,7 +91,9 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
         horzLines: { color: darkMode ? '#21262D' : '#F0F0F0', style: 1 },
       },
       timeScale: { borderColor: '#30363D', timeVisible: true },
-      rightPriceScale: { borderColor: '#30363D' },
+      // Price panel sits in the top ~55% of the chart; leaves room below for
+      // volume (~20%) and KD (~22%) overlay scales.
+      rightPriceScale: { borderColor: '#30363D', scaleMargins: { top: 0.05, bottom: 0.42 } },
       crosshair: { mode: 1 },
     });
 
@@ -106,9 +111,48 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
       open: k.open, high: k.high, low: k.low, close: k.close,
     })));
 
+    // Offset from full kline series into the visible slice — shared by all MA/VOL overlays
+    const offset = fullKlines.length - klines.length;
+
+    // Volume histogram — overlay series on the bottom 22% of the chart
+    const volumeSeries = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'volume',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    chart.priceScale('volume').applyOptions({
+      scaleMargins: { top: 0.6, bottom: 0.22 },
+    });
+    volumeSeries.setData(klines.map((k) => ({
+      time: k.date as unknown as import('lightweight-charts').UTCTimestamp,
+      value: k.volume,
+      color: k.close >= k.open ? 'rgba(255, 59, 59, 0.5)' : 'rgba(0, 200, 81, 0.5)',
+    })));
+
+    // Volume MA20 line on same overlay scale
+    const VOL_MA_PERIOD = 20;
+    const allVolumes = fullKlines.map((k) => k.volume);
+    const volMaFull = calculateMAFull(allVolumes, VOL_MA_PERIOD);
+    const volMaSlice = volMaFull.slice(offset);
+    const volMaData = klines
+      .map((k, i) => ({ time: k.date as unknown as import('lightweight-charts').UTCTimestamp, value: volMaSlice[i] }))
+      .filter((d): d is { time: import('lightweight-charts').UTCTimestamp; value: number } => d.value !== null);
+    if (volMaData.length > 0) {
+      const volMaSeries = chart.addLineSeries({
+        color: '#FFB020',
+        lineWidth: 1,
+        priceScaleId: 'volume',
+        crosshairMarkerVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+        title: `VOL MA${VOL_MA_PERIOD}`,
+      });
+      volMaSeries.setData(volMaData);
+    }
+
     // Compute all 6 MA lines from the full klines (so MA is accurate even when zoomed)
     const allCloses = fullKlines.map((k) => k.close);
-    const offset = fullKlines.length - klines.length;
 
     for (const period of [5, 10, 20, 60, 120, 240] as MAPeriod[]) {
       const maFull = calculateMAFull(allCloses, period);
@@ -130,9 +174,53 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
       lineSeries.setData(maData);
     }
 
+    // KD (5, 3, 3) — computed over full series for accuracy, drawn on the bottom panel
+    const kdFull = calculateKD(fullKlines, 5, 3, 3);
+    const kSlice = kdFull.k.slice(offset);
+    const dSlice = kdFull.d.slice(offset);
+    const kData = klines
+      .map((bar, i) => ({ time: bar.date as unknown as import('lightweight-charts').UTCTimestamp, value: kSlice[i] }))
+      .filter((p): p is { time: import('lightweight-charts').UTCTimestamp; value: number } => p.value !== null);
+    const dData = klines
+      .map((bar, i) => ({ time: bar.date as unknown as import('lightweight-charts').UTCTimestamp, value: dSlice[i] }))
+      .filter((p): p is { time: import('lightweight-charts').UTCTimestamp; value: number } => p.value !== null);
+    if (kData.length > 0) {
+      const kSeries = chart.addLineSeries({
+        color: '#58A6FF',
+        lineWidth: 1,
+        priceScaleId: 'kd',
+        crosshairMarkerVisible: false,
+        lastValueVisible: true,
+        priceLineVisible: false,
+        title: 'K(5)',
+      });
+      kSeries.setData(kData);
+      const dSeries = chart.addLineSeries({
+        color: '#FF7B72',
+        lineWidth: 1,
+        priceScaleId: 'kd',
+        crosshairMarkerVisible: false,
+        lastValueVisible: true,
+        priceLineVisible: false,
+        title: 'D(3)',
+      });
+      dSeries.setData(dData);
+      chart.priceScale('kd').applyOptions({
+        scaleMargins: { top: 0.82, bottom: 0 },
+      });
+    }
+
     chart.timeScale().fitContent();
     return () => chart.remove();
   }, [fullKlines, loadingKlines, rangeIndex, selectedMA, darkMode]);
+
+  // KD trend status — derived from the full kline series so it's stable
+  // across range toggles.
+  const kdStatus = (() => {
+    if (fullKlines.length < 6) return null;
+    const { k, d } = calculateKD(fullKlines, 5, 3, 3);
+    return getKDTrend(k, d);
+  })();
 
   const isUp = (stock.change ?? 0) >= 0;
 
@@ -150,6 +238,14 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
             <span className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded">
               L{stock.layer} {stock.layer_name}
             </span>
+            {stock.disposal && (
+              <span
+                className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/50 font-bold"
+                title={`處置期間 ${stock.disposal.start_date} ～ ${stock.disposal.end_date}\n原因：${stock.disposal.reason || '累計處置'}`}
+              >
+                ⚠ {stock.disposal.measure || '處置股'}
+              </span>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -174,40 +270,36 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
           <div className="flex flex-wrap gap-6 mt-2 text-sm text-text-s">
             <span>成交量 <span className="text-text-p font-mono">{formatVolume(stock.volume)}</span></span>
             <span>市值 <span className="text-text-p font-mono">{formatMarketCap(stock.market_cap)}</span></span>
-            {stock.pe_ratio && (
-              <span>本益比 <span className="text-text-p font-mono">{stock.pe_ratio.toFixed(1)}x</span></span>
-            )}
+            {(() => {
+              const pe = getDisplayPe(stock);
+              return pe !== null ? (
+                <span className="inline-flex items-center">
+                  本益比 <span className="text-text-p font-mono ml-1">{pe.toFixed(1)}x</span>
+                  <PeTooltip stock={stock} />
+                </span>
+              ) : null;
+            })()}
             <span className="text-text-t text-xs self-center">
               {loadingKlines ? '載入中...' : `共 ${fullKlines.length} 個交易日`}
             </span>
+            {kdStatus && kdStatus.k !== null && kdStatus.d !== null && (() => {
+              const { text, color } = kdTrendLabel(kdStatus.trend);
+              return (
+                <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded border ${color} self-center`}>
+                  <span className="font-semibold">KD(5,3,3)</span>
+                  <span className="font-mono tabular-nums">
+                    K {kdStatus.k.toFixed(1)} / D {kdStatus.d.toFixed(1)}
+                  </span>
+                  <span className="font-semibold">{text}</span>
+                </span>
+              );
+            })()}
           </div>
         </div>
 
-        {/* Institutional section */}
-        <div className="p-4 border-b border-border-c">
-          <div className="flex items-center gap-2 mb-3">
-            <h3 className="text-sm font-semibold text-text-p">三大法人 / 融資融券</h3>
-            {instiData && (
-              <span className="text-xs text-text-t font-mono">
-                {instiData.date.slice(0, 4)}/{instiData.date.slice(4, 6)}/{instiData.date.slice(6, 8)}
-              </span>
-            )}
-          </div>
-          {!insti ? (
-            <div className="text-sm text-text-t">尚無法人資料</div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <InstiStat label="外資買賣超" value={insti.foreign_net} unit="股" />
-              <InstiStat label="投信買賣超" value={insti.trust_net} unit="股" />
-              <InstiStat label="自營買賣超" value={insti.dealer_net} unit="股" />
-              <InstiStat label="三大法人合計" value={insti.total_net} unit="股" emphasize />
-              <InstiStat label="融資餘額" value={insti.margin_balance} unit="張" neutral />
-              <InstiStat label="融資增減" value={insti.margin_change} unit="張" />
-              <InstiStat label="融券餘額" value={insti.short_balance} unit="張" neutral />
-              <InstiStat label="融券增減" value={insti.short_change} unit="張" invertColor />
-            </div>
-          )}
-        </div>
+        {/* Institutional section — split cards (20d vs latest) + click to expand daily */}
+        <InstitutionalSection symbol={stock.symbol} />
+
 
         {/* Chart */}
         <div className="p-4 border-b border-border-c">
@@ -300,6 +392,9 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
                   ))}
                 </div>
               </div>
+
+              {/* D: Capacity analysis */}
+              <CapacitySection symbol={stock.symbol} name={stock.name} />
             </>
           )}
         </div>
@@ -315,29 +410,204 @@ function fmtInsti(n: number): string {
   return abs.toLocaleString('zh-TW');
 }
 
-function InstiStat({ label, value, unit, emphasize, neutral, invertColor }: {
+type InstiKey = 'foreign_net' | 'trust_net' | 'dealer_net' | 'total_net'
+              | 'margin_balance' | 'margin_change' | 'short_balance' | 'short_change';
+
+interface InstiMetricDef {
+  key: InstiKey;
   label: string;
-  value: number;
   unit: string;
+  /** balance = snapshot metric (display latest value, 20d left side = latest-vs-20d change). */
+  balance?: boolean;
   emphasize?: boolean;
-  neutral?: boolean;   // for balance (no color)
-  invertColor?: boolean; // for 融券 (positive = bearish)
-}) {
-  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
-  const colorClass = neutral
-    ? 'text-text-p'
-    : value === 0
-      ? 'text-text-t'
-      : (invertColor ? value < 0 : value > 0)
-        ? 'text-tw-up'
-        : 'text-tw-down';
+  invertColor?: boolean;  // 融券: positive change = bearish
+}
+
+const INSTI_METRICS: InstiMetricDef[] = [
+  { key: 'foreign_net',    label: '外資買賣超', unit: '股' },
+  { key: 'trust_net',      label: '投信買賣超', unit: '股' },
+  { key: 'dealer_net',     label: '自營買賣超', unit: '股' },
+  { key: 'total_net',      label: '三大法人合計', unit: '股', emphasize: true },
+  { key: 'margin_balance', label: '融資餘額',   unit: '張', balance: true },
+  { key: 'margin_change',  label: '融資增減',   unit: '張' },
+  { key: 'short_balance',  label: '融券餘額',   unit: '張', balance: true },
+  { key: 'short_change',   label: '融券增減',   unit: '張', invertColor: true },
+];
+
+function fmtDate(yyyymmdd: string) {
+  if (!yyyymmdd || yyyymmdd.length < 8) return yyyymmdd;
+  return `${yyyymmdd.slice(4,6)}/${yyyymmdd.slice(6,8)}`;
+}
+
+function InstitutionalSection({ symbol }: { symbol: string }) {
+  const { data: history, loading } = useInstitutionalHistory(symbol, 20);
+  const [openKey, setOpenKey] = useState<InstiKey | null>(null);
+
+  if (loading && history.length === 0) {
+    return (
+      <div className="p-4 border-b border-border-c">
+        <h3 className="text-sm font-semibold text-text-p mb-2">三大法人 / 融資融券</h3>
+        <div className="text-sm text-text-t">載入中...</div>
+      </div>
+    );
+  }
+  if (history.length === 0) {
+    return (
+      <div className="p-4 border-b border-border-c">
+        <h3 className="text-sm font-semibold text-text-p mb-2">三大法人 / 融資融券</h3>
+        <div className="text-sm text-text-t">尚無法人資料（cache 還沒回填）</div>
+      </div>
+    );
+  }
+
+  const latest = history[0];
+  const dateRange = history.length > 1
+    ? `${fmtDate(history[history.length-1].date)} ~ ${fmtDate(latest.date)}`
+    : fmtDate(latest.date);
 
   return (
-    <div className="bg-dash-bg border border-border-c rounded-lg p-2.5">
-      <div className="text-xs text-text-s mb-1">{label}</div>
-      <div className={`font-mono tabular-nums ${emphasize ? 'text-lg font-bold' : 'text-base font-semibold'} ${colorClass}`}>
-        {value === 0 ? '--' : `${sign}${fmtInsti(value)}`}
-        <span className="text-xs text-text-t ml-1 font-normal">{unit}</span>
+    <div className="p-4 border-b border-border-c">
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-text-p">三大法人 / 融資融券</h3>
+        <span className="text-xs text-text-t font-mono">
+          近 {history.length} 日 · {dateRange}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {INSTI_METRICS.map((m) => (
+          <InstiCard
+            key={m.key}
+            def={m}
+            history={history}
+            isOpen={openKey === m.key}
+            onToggle={() => setOpenKey(openKey === m.key ? null : m.key)}
+          />
+        ))}
+      </div>
+      {openKey && (
+        <InstiDailyTable def={INSTI_METRICS.find((m) => m.key === openKey)!} history={history} />
+      )}
+    </div>
+  );
+}
+
+function InstiCard({ def, history, isOpen, onToggle }: {
+  def: InstiMetricDef;
+  history: InstitutionalHistoryDay[];
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  const latest = history[0];
+  const latestVal = latest ? (latest[def.key] as number) : 0;
+
+  // Left side:
+  //   - net flow: 20-day sum
+  //   - balance: 20-day change (latest - oldest)
+  let leftVal: number;
+  if (def.balance) {
+    const oldest = history[history.length - 1];
+    leftVal = latestVal - (oldest ? (oldest[def.key] as number) : 0);
+  } else {
+    leftVal = history.reduce((s, d) => s + (d[def.key] as number), 0);
+  }
+
+  const colorFor = (v: number) => {
+    if (v === 0) return 'text-text-t';
+    const isUp = def.invertColor ? v < 0 : v > 0;
+    return isUp ? 'text-tw-up' : 'text-tw-down';
+  };
+
+  const sign = (v: number) => v > 0 ? '+' : v < 0 ? '-' : '';
+  const fmt = (v: number) => v === 0 ? '--' : `${sign(v)}${fmtInsti(v)}`;
+
+  return (
+    <button
+      onClick={onToggle}
+      className={`bg-dash-bg border rounded-lg p-2.5 text-left transition-colors
+        ${isOpen ? 'border-accent ring-1 ring-accent/50' : 'border-border-c hover:border-accent/60'}`}
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-semibold text-text-s">{def.label}</span>
+        <span className="text-[10px] text-text-t">{isOpen ? '▾' : '▸'}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {/* Left: 20-day aggregate */}
+        <div className="border-r border-border-c/50 pr-2">
+          <div className="text-[10px] text-text-t mb-0.5">
+            {def.balance ? `近${history.length}日變化` : `近${history.length}日累計`}
+          </div>
+          <div className={`font-mono tabular-nums text-sm font-bold ${colorFor(leftVal)}`}>
+            {fmt(leftVal)}
+            <span className="text-[10px] text-text-t ml-0.5 font-normal">{def.unit}</span>
+          </div>
+        </div>
+        {/* Right: latest day */}
+        <div>
+          <div className="text-[10px] text-text-t mb-0.5 font-mono">
+            {latest ? fmtDate(latest.date) : '--'}
+          </div>
+          <div className={`font-mono tabular-nums ${def.emphasize ? 'text-base font-bold' : 'text-sm font-semibold'} ${def.balance ? 'text-text-p' : colorFor(latestVal)}`}>
+            {def.balance ? fmtInsti(latestVal) : fmt(latestVal)}
+            <span className="text-[10px] text-text-t ml-0.5 font-normal">{def.unit}</span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function InstiDailyTable({ def, history }: {
+  def: InstiMetricDef;
+  history: InstitutionalHistoryDay[];
+}) {
+  const isNet = !def.balance;
+  const colorFor = (v: number) => {
+    if (v === 0) return 'text-text-t';
+    const isUp = def.invertColor ? v < 0 : v > 0;
+    return isUp ? 'text-tw-up' : 'text-tw-down';
+  };
+  return (
+    <div className="mt-3 bg-dash-bg border border-border-c rounded-lg overflow-hidden">
+      <div className="px-3 py-2 bg-card-bg/50 text-xs font-semibold text-text-p border-b border-border-c">
+        {def.label} · 近 {history.length} 日逐日明細
+      </div>
+      <div className="max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20">
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 bg-dash-bg border-b border-border-c">
+            <tr className="text-text-t">
+              <th className="text-left px-3 py-1.5">日期</th>
+              <th className="text-right px-3 py-1.5">{isNet ? '買賣超' : '餘額'}</th>
+              <th className="text-right px-3 py-1.5">{isNet ? '累計' : '較前日'}</th>
+            </tr>
+          </thead>
+          <tbody className="font-mono tabular-nums">
+            {history.map((d, i) => {
+              const v = d[def.key] as number;
+              // running sum (for net) or day-over-day diff (for balance)
+              let secondary: number;
+              if (isNet) {
+                secondary = history.slice(i).reduce((s, r) => s + (r[def.key] as number), 0);
+              } else {
+                const prev = history[i + 1];
+                secondary = prev ? (v - (prev[def.key] as number)) : 0;
+              }
+              const sign = (n: number) => n > 0 ? '+' : n < 0 ? '-' : '';
+              return (
+                <tr key={d.date} className="border-b border-border-c/40 hover:bg-card-bg/40">
+                  <td className="px-3 py-1.5 text-text-s">
+                    {d.date.slice(0,4)}/{d.date.slice(4,6)}/{d.date.slice(6,8)}
+                  </td>
+                  <td className={`text-right px-3 py-1.5 ${def.balance ? 'text-text-p' : colorFor(v)}`}>
+                    {def.balance ? fmtInsti(v) : `${sign(v)}${fmtInsti(v)}`}
+                  </td>
+                  <td className={`text-right px-3 py-1.5 ${colorFor(secondary)}`}>
+                    {sign(secondary)}{fmtInsti(secondary)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

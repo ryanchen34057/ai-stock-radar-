@@ -164,7 +164,7 @@ export function SupplyChainMap() {
   );
 
   return (
-    <div className="flex h-full min-h-screen bg-dash-bg">
+    <div className="flex h-full bg-dash-bg overflow-hidden">
       {/* ── Left panel: hierarchy ── */}
       <div className="w-72 flex-shrink-0 border-r border-border-c overflow-y-auto p-3">
         <h2 className="text-xs font-semibold text-text-s uppercase tracking-widest mb-3 px-1">

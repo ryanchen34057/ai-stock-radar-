@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, SpecialFilters, InstiFilters } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 
 interface DashboardState {
   // Data
@@ -15,6 +15,12 @@ interface DashboardState {
   maProximityFilter: MAProximityFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
+  priceFilter: RangeFilter;
+  peFilter: RangeFilter;
+  kdFilters: KDFilters;
+  themeFilter: ThemeFilter;   // A / B / C / all / cross
+  tierFilter: TierFilter;     // 1=僅 T1, 2=T1+T2, 3=全部
+  searchQuery: string;        // free-text filter by symbol or name
   selectedLayers: number[];
   sortBy: SortBy;
   darkMode: boolean;
@@ -29,6 +35,12 @@ interface DashboardState {
   setMAProximityFilter: (f: MAProximityFilter) => void;
   setSpecialFilters: (f: SpecialFilters) => void;
   setInstiFilters: (f: InstiFilters) => void;
+  setPriceFilter: (f: RangeFilter) => void;
+  setPeFilter: (f: RangeFilter) => void;
+  setKDFilters: (f: KDFilters) => void;
+  setThemeFilter: (t: ThemeFilter) => void;
+  setTierFilter: (t: TierFilter) => void;
+  setSearchQuery: (q: string) => void;
   toggleLayer: (layer: number) => void;
   clearLayers: () => void;
   setSortBy: (sort: SortBy) => void;
@@ -52,6 +64,15 @@ const DEFAULT_INSTI: InstiFilters = {
   shortDecreasing: false,
 };
 
+const DEFAULT_KD: KDFilters = {
+  golden: false,
+  death: false,
+  up: false,
+  down: false,
+  oversold: false,
+  overbought: false,
+};
+
 export const useDashboardStore = create<DashboardState>((set) => ({
   stocks: [],
   lastUpdated: null,
@@ -64,6 +85,12 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   maProximityFilter: { enabled: false, ma: 20, direction: 'above', threshold: 3 },
   specialFilters: DEFAULT_SPECIAL,
   instiFilters: DEFAULT_INSTI,
+  priceFilter: { enabled: false, min: null, max: null },
+  peFilter: { enabled: false, min: null, max: null },
+  kdFilters: DEFAULT_KD,
+  themeFilter: 'A',
+  tierFilter: 3, // no tier-based filtering in the grid; the star badge on each card conveys tier visually
+  searchQuery: '',
   selectedLayers: [],
   sortBy: 'change_percent',
   darkMode: true,
@@ -78,6 +105,12 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setMAProximityFilter: (maProximityFilter) => set({ maProximityFilter }),
   setSpecialFilters: (specialFilters) => set({ specialFilters }),
   setInstiFilters: (instiFilters) => set({ instiFilters }),
+  setPriceFilter: (priceFilter) => set({ priceFilter }),
+  setPeFilter: (peFilter) => set({ peFilter }),
+  setKDFilters: (kdFilters) => set({ kdFilters }),
+  setThemeFilter: (themeFilter) => set({ themeFilter }),
+  setTierFilter: (tierFilter) => set({ tierFilter }),
+  setSearchQuery: (searchQuery) => set({ searchQuery }),
   toggleLayer: (layer) =>
     set((s) => ({
       selectedLayers: s.selectedLayers.includes(layer)

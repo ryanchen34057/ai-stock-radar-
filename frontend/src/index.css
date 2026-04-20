@@ -38,3 +38,20 @@
     background: #484F58;
   }
 }
+
+/* Feed-style new-item highlight used by NewsFeed — gentle slide-in + fade
+   from a tinted background, Facebook-feed style. Runs once on mount and
+   settles into the normal row styling. */
+@keyframes feedNewItem {
+  0%   { transform: translateY(-4px); background-color: rgba(88, 166, 255, 0.18); }
+  60%  { background-color: rgba(88, 166, 255, 0.10); }
+  100% { transform: translateY(0);    background-color: transparent; }
+}
+.feed-new-item {
+  animation: feedNewItem 2.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translate(-50%, -4px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}

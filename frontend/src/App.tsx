@@ -3,65 +3,150 @@ import { useDashboardStore } from './store/dashboardStore';
 import { Dashboard } from './components/Dashboard';
 import { SupplyChainMap } from './components/SupplyChainMap';
 import { NewsFeed } from './components/NewsFeed';
+import { KolFeed } from './components/KolFeed';
+import { FbFeed } from './components/FbFeed';
+import { Settings } from './components/Settings';
+import { Panel } from './components/FloatingPanel';
+import { StockDetailModal } from './components/StockDetailModal';
+import { SetupOverlay } from './components/SetupOverlay';
+import { OnboardingGuide } from './components/OnboardingGuide';
+import { usePanelLayout, usePanelVisibility, type PanelId } from './hooks/usePanelLayout';
 
-type Tab = 'dashboard' | 'chain';
+type Tab = 'dashboard' | 'chain' | 'settings';
+
+interface PanelDescriptor {
+  id: PanelId;
+  title: string;
+  icon: string;
+  content: React.ReactNode;
+}
 
 export default function App() {
   const darkMode = useDashboardStore((s) => s.darkMode);
+  const selectedStock = useDashboardStore((s) => s.selectedStock);
+  const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
+  const selectedMA = useDashboardStore((s) => s.selectedMA);
   const [tab, setTab] = useState<Tab>('dashboard');
+  const kol = usePanelLayout('kol');
+  const news = usePanelLayout('news');
+  const fb = usePanelLayout('fb');
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    if (darkMode) document.documentElement.classList.add('dark');
+    else           document.documentElement.classList.remove('dark');
   }, [darkMode]);
 
+  const panels: PanelDescriptor[] = [
+    { id: 'kol',  title: '理財頻道',     icon: '🎙️', content: <KolFeed /> },
+    { id: 'fb',   title: '理財粉專',     icon: '🅕',  content: <FbFeed /> },
+    { id: 'news', title: '即時新聞',     icon: '📰', content: <NewsFeed /> },
+  ];
+
+  const stateOf = (id: PanelId) => (id === 'kol' ? kol : id === 'fb' ? fb : news);
+  const isVisible = (id: PanelId) => stateOf(id).state.visible;
+  const modeOf   = (id: PanelId) => stateOf(id).state.mode;
+
+  const leftDocked  = panels.filter((p) => isVisible(p.id) && modeOf(p.id) === 'left');
+  const rightDocked = panels.filter((p) => isVisible(p.id) && modeOf(p.id) === 'right');
+  const floating    = panels.filter((p) => isVisible(p.id) && modeOf(p.id) === 'floating');
+
   return (
-    <div className="min-h-screen bg-dash-bg flex flex-col">
+    <div className="h-screen bg-dash-bg flex flex-col overflow-hidden">
       {/* Global tab bar */}
       <nav className="flex items-center gap-0 border-b border-border-c bg-card-bg px-4 flex-shrink-0">
-        <TabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')}>
-          📊 儀表板
-        </TabButton>
-        <TabButton active={tab === 'chain'} onClick={() => setTab('chain')}>
-          🔗 供應鏈地圖
-        </TabButton>
-        <span className="ml-auto text-xs text-text-t py-2 pr-1 hidden sm:block">
-          AI 產業鏈股票雷達
-        </span>
+        <TabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')}>📊 儀表板</TabButton>
+        <TabButton active={tab === 'chain'}     onClick={() => setTab('chain')}>🔗 供應鏈地圖</TabButton>
+        <TabButton active={tab === 'settings'}  onClick={() => setTab('settings')}>⚙ 設定</TabButton>
+        <div className="ml-auto flex items-center gap-1">
+          <PanelToggles />
+          <span className="text-xs text-text-t pl-2 pr-1 hidden sm:inline">
+            AI 產業鏈股票雷達
+          </span>
+        </div>
       </nav>
 
-      <div className="flex-1 overflow-hidden flex">
-        <div className="flex-1 overflow-hidden">
-          {tab === 'dashboard' && <Dashboard />}
-          {tab === 'chain' && <SupplyChainMap />}
+      {/* Content area: [leftDocked] | [center (with floating overlays)] | [rightDocked] */}
+      <div className="flex-1 min-h-0 flex">
+        {leftDocked.map((p) => (
+          <Panel key={p.id} id={p.id} title={p.title} icon={p.icon}>{p.content}</Panel>
+        ))}
+
+        {/* Center flex-1 — responsively resizes when dock widths change */}
+        <div className="flex-1 min-w-0 min-h-0 relative">
+          <div className="absolute inset-0 overflow-y-auto">
+            {tab === 'dashboard' && <Dashboard />}
+            {tab === 'chain'     && <SupplyChainMap />}
+            {tab === 'settings'  && <Settings />}
+          </div>
+
+          {/* Floating panels live inside center so they only overlay the main content area */}
+          {floating.map((p) => (
+            <Panel key={p.id} id={p.id} title={p.title} icon={p.icon}>{p.content}</Panel>
+          ))}
         </div>
-        <NewsFeed />
+
+        {rightDocked.map((p) => (
+          <Panel key={p.id} id={p.id} title={p.title} icon={p.icon}>{p.content}</Panel>
+        ))}
       </div>
+
+      {/* Global stock detail modal — rendered above everything regardless of tab */}
+      {selectedStock && (
+        <StockDetailModal
+          stock={selectedStock}
+          selectedMA={selectedMA}
+          onClose={() => setSelectedStock(null)}
+        />
+      )}
+
+      {/* First-run: startup progress + usage guide */}
+      <SetupOverlay />
+      <OnboardingGuide />
     </div>
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
+function PanelToggles() {
+  const { kol, news, fb } = usePanelVisibility();
+  const cls = (visible: boolean) =>
+    `px-2 py-1 text-xs rounded border transition-colors ${
+      visible
+        ? 'border-accent/50 bg-accent/15 text-accent'
+        : 'border-border-c bg-card-bg text-text-s hover:text-text-p'
+    }`;
+  return (
+    <>
+      <button className={cls(kol.visible)}
+        onClick={() => kol.setVisible(!kol.visible)}
+        onDoubleClick={() => kol.reset()}
+        title={`${kol.visible ? '隱藏' : '顯示'}理財頻道面板（雙擊重置）`}>
+        🎙️ 理財
+      </button>
+      <button className={cls(fb.visible)}
+        onClick={() => fb.setVisible(!fb.visible)}
+        onDoubleClick={() => fb.reset()}
+        title={`${fb.visible ? '隱藏' : '顯示'}理財粉專面板（雙擊重置）`}>
+        🅕 粉專
+      </button>
+      <button className={cls(news.visible)}
+        onClick={() => news.setVisible(!news.visible)}
+        onDoubleClick={() => news.reset()}
+        title={`${news.visible ? '隱藏' : '顯示'}新聞面板（雙擊重置）`}>
+        📰 新聞
+      </button>
+    </>
+  );
+}
+
+function TabButton({ active, onClick, children }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <button
-      onClick={onClick}
+    <button onClick={onClick}
       className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px
-        ${active
-          ? 'border-accent text-accent'
-          : 'border-transparent text-text-s hover:text-text-p hover:border-border-c'
-        }`}
-    >
+        ${active ? 'border-accent text-accent' : 'border-transparent text-text-s hover:text-text-p hover:border-border-c'}`}>
       {children}
     </button>
   );

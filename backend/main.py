@@ -233,18 +233,49 @@ def health():
 # If frontend/dist exists, serve the built React app from the backend.
 # This way the Electron wrapper just points at http://127.0.0.1:8000/.
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 import os as _os
 
-_FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
-# Also check a sibling path used by Electron's bundled layout (electron/resources/frontend)
-_ELECTRON_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+# Candidate locations for the built React app, in priority order.
+_FRONTEND_CANDIDATES: list[Path] = []
 if _os.environ.get("FRONTEND_DIST_DIR"):
-    _FRONTEND_DIST = Path(_os.environ["FRONTEND_DIST_DIR"])
+    _FRONTEND_CANDIDATES.append(Path(_os.environ["FRONTEND_DIST_DIR"]))
+# Dev / from-source layout
+_FRONTEND_CANDIDATES.append(Path(__file__).parent.parent / "frontend" / "dist")
+# Packaged electron-builder layout: <install>/resources/frontend-dist
+# (when running as extracted python inside electron resources)
+_FRONTEND_CANDIDATES.append(Path(__file__).parent.parent.parent / "frontend-dist")
 
-if _FRONTEND_DIST.is_dir():
-    # Mount /assets (Vite's chunked JS/CSS/images) verbatim
-    app.mount("/assets", StaticFiles(directory=str(_FRONTEND_DIST / "assets")), name="assets")
+_FRONTEND_DIST: Path | None = next(
+    (p for p in _FRONTEND_CANDIDATES if p.is_dir() and (p / "index.html").is_file()),
+    None,
+)
+
+logger.info(f"Frontend dist candidates checked: {[str(p) for p in _FRONTEND_CANDIDATES]}")
+logger.info(f"Frontend dist resolved to: {_FRONTEND_DIST}")
+
+
+@app.get("/_debug/paths")
+def _debug_paths():
+    """Diagnose 'Not Found' in the packaged Electron app."""
+    return {
+        "cwd": _os.getcwd(),
+        "env_FRONTEND_DIST_DIR": _os.environ.get("FRONTEND_DIST_DIR"),
+        "env_USER_DATA_DIR": _os.environ.get("USER_DATA_DIR"),
+        "candidates": [
+            {"path": str(p), "is_dir": p.is_dir(),
+             "has_index": (p / "index.html").is_file() if p.exists() else False}
+            for p in _FRONTEND_CANDIDATES
+        ],
+        "resolved": str(_FRONTEND_DIST) if _FRONTEND_DIST else None,
+        "db_path": str(DB_PATH),
+    }
+
+
+if _FRONTEND_DIST:
+    _ASSETS_DIR = _FRONTEND_DIST / "assets"
+    if _ASSETS_DIR.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_ASSETS_DIR)), name="assets")
 
     @app.get("/favicon.svg")
     @app.get("/favicon.ico")
@@ -253,19 +284,42 @@ if _FRONTEND_DIST.is_dir():
             p = _FRONTEND_DIST / name
             if p.exists():
                 return FileResponse(p)
-        raise HTTPException(status_code=404)  # noqa: F821
+        raise HTTPException(status_code=404)
 
-    # Catch-all: serve index.html for the SPA, BUT only for non-/api paths so
-    # API 404s still return JSON. Registered LAST to avoid shadowing routes.
     @app.get("/{full_path:path}")
     def _spa_fallback(full_path: str):
-        if full_path.startswith(("api/", "api")):
-            raise HTTPException(status_code=404)  # noqa: F821
+        # Let API 404s bubble as JSON; serve index.html for everything else.
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(status_code=404)
         idx = _FRONTEND_DIST / "index.html"
         if idx.exists():
             return FileResponse(idx)
-        raise HTTPException(status_code=404)  # noqa: F821
+        raise HTTPException(status_code=404)
 
     logger.info(f"Serving frontend from {_FRONTEND_DIST}")
 else:
-    logger.info(f"Frontend dist not found at {_FRONTEND_DIST}; API-only mode")
+    # Dist wasn't found — serve a diagnostic page at / so users can see the
+    # actual paths, instead of a bare JSON 404 from FastAPI's router miss.
+    @app.get("/", response_class=HTMLResponse)
+    def _missing_dist():
+        cand = "\n".join(
+            f"  - {p}  (exists={p.exists()}, is_dir={p.is_dir()})"
+            for p in _FRONTEND_CANDIDATES
+        )
+        return (
+            "<html><body style='font-family:monospace;padding:24px;"
+            "background:#0D1117;color:#C9D1D9'>"
+            "<h2 style='color:#F85149'>⚠ Frontend assets not found</h2>"
+            "<p>The packaged app could not locate <code>index.html</code>. "
+            "Checked these candidates:</p>"
+            f"<pre>{cand}</pre>"
+            f"<p>FRONTEND_DIST_DIR env = "
+            f"<code>{_os.environ.get('FRONTEND_DIST_DIR') or '(not set)'}</code></p>"
+            "<p>Visit <a href='/_debug/paths' style='color:#58A6FF'>/_debug/paths</a> "
+            "for full diagnostic JSON.</p>"
+            "</body></html>"
+        )
+    logger.warning(
+        f"Frontend dist not found in any candidate. Running API-only. "
+        f"Candidates: {[str(p) for p in _FRONTEND_CANDIDATES]}"
+    )

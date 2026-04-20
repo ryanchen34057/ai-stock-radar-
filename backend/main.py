@@ -4,8 +4,9 @@ import threading
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -226,3 +227,45 @@ app.include_router(router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# ── Static frontend serving (production / Electron builds) ────────────────────
+# If frontend/dist exists, serve the built React app from the backend.
+# This way the Electron wrapper just points at http://127.0.0.1:8000/.
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os as _os
+
+_FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+# Also check a sibling path used by Electron's bundled layout (electron/resources/frontend)
+_ELECTRON_DIST = Path(__file__).parent.parent / "frontend" / "dist"
+if _os.environ.get("FRONTEND_DIST_DIR"):
+    _FRONTEND_DIST = Path(_os.environ["FRONTEND_DIST_DIR"])
+
+if _FRONTEND_DIST.is_dir():
+    # Mount /assets (Vite's chunked JS/CSS/images) verbatim
+    app.mount("/assets", StaticFiles(directory=str(_FRONTEND_DIST / "assets")), name="assets")
+
+    @app.get("/favicon.svg")
+    @app.get("/favicon.ico")
+    def _favicon():
+        for name in ("favicon.svg", "favicon.ico"):
+            p = _FRONTEND_DIST / name
+            if p.exists():
+                return FileResponse(p)
+        raise HTTPException(status_code=404)  # noqa: F821
+
+    # Catch-all: serve index.html for the SPA, BUT only for non-/api paths so
+    # API 404s still return JSON. Registered LAST to avoid shadowing routes.
+    @app.get("/{full_path:path}")
+    def _spa_fallback(full_path: str):
+        if full_path.startswith(("api/", "api")):
+            raise HTTPException(status_code=404)  # noqa: F821
+        idx = _FRONTEND_DIST / "index.html"
+        if idx.exists():
+            return FileResponse(idx)
+        raise HTTPException(status_code=404)  # noqa: F821
+
+    logger.info(f"Serving frontend from {_FRONTEND_DIST}")
+else:
+    logger.info(f"Frontend dist not found at {_FRONTEND_DIST}; API-only mode")

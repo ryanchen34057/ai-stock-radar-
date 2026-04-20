@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<title>AI 產業鏈股票雷達</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: radial-gradient(ellipse at center, #161B22 0%, #010409 100%);
+    color: #C9D1D9;
+    font-family: "Microsoft JhengHei", "Segoe UI", sans-serif;
+    overflow: hidden;
+    -webkit-user-select: none;
+  }
+  .wrap {
+    height: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+  }
+  .radar {
+    width: 96px; height: 96px; border-radius: 50%;
+    background: radial-gradient(circle at center, #0D1117 0%, #010409 100%);
+    border: 2px solid #58A6FF;
+    position: relative;
+    box-shadow: 0 0 40px rgba(88, 166, 255, 0.3);
+  }
+  .radar::before, .radar::after {
+    content: ''; position: absolute; border: 1px solid rgba(88, 166, 255, 0.4);
+    border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  }
+  .radar::before { width: 60%; height: 60%; }
+  .radar::after  { width: 30%; height: 30%; }
+  .sweep {
+    position: absolute; width: 50%; height: 50%;
+    top: 0; left: 50%;
+    background: conic-gradient(from 0deg, rgba(88, 166, 255, 0.55), rgba(88, 166, 255, 0));
+    transform-origin: 0% 100%;
+    animation: sweep 2.2s linear infinite;
+    border-top-right-radius: 100%;
+  }
+  @keyframes sweep {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  h1 { margin: 0; font-size: 18px; font-weight: 700; color: #F0F6FC; letter-spacing: 1px; }
+  p  { margin: 0; font-size: 12px; color: #8B949E; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="radar"><div class="sweep"></div></div>
+    <h1>AI 產業鏈股票雷達</h1>
+    <p>啟動中...</p>
+  </div>
+</body>
+</html>

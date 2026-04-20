@@ -30,3 +30,10 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Electron build artefacts (huge binaries — not committed)
+electron/node_modules/
+electron/release/
+electron/python-embed/
+electron/*.zip
+electron/python-*.zip

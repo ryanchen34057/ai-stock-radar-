@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import type { MAPeriod, AlertFilter, SortBy, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter } from '../types/stock';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import type { MAPeriod, AlertFilter, SortBy, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, StockData } from '../types/stock';
 import { StockManager } from './StockManager';
 import { useDashboardStore } from '../store/dashboardStore';
 import { useStockData } from '../hooks/useStockData';
 import { formatDate } from '../utils/formatters';
 import { LayerCards } from './LayerCards';
+import { layerShortCode } from '../types/stock';
 
 const MA_OPTIONS: MAPeriod[] = [5, 10, 20, 60, 120, 240];
 
@@ -96,7 +97,70 @@ export function ControlBar() {
     darkMode, toggleDarkMode,
     lastUpdated, loading,
   } = useDashboardStore();
+  const stocks = useDashboardStore((s) => s.stocks);
+  const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
   const { refresh } = useStockData();
+
+  // ── Search autocomplete ──
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchHighlight, setSearchHighlight] = useState(0);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+
+  const searchSuggestions: StockData[] = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return stocks
+      .filter((s) =>
+        s.symbol.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
+        (s.sub_category ?? '').toLowerCase().includes(q)
+      )
+      .sort((a, b) => {
+        // exact symbol match first, then symbol-startsWith, then name-startsWith
+        const as = a.symbol.toLowerCase(), an = a.name.toLowerCase();
+        const bs = b.symbol.toLowerCase(), bn = b.name.toLowerCase();
+        const rank = (sym: string, nm: string) =>
+          sym === q ? 0 : sym.startsWith(q) ? 1 : nm.startsWith(q) ? 2 : 3;
+        return rank(as, an) - rank(bs, bn);
+      })
+      .slice(0, 8);
+  }, [searchQuery, stocks]);
+
+  // Reset highlight when suggestions change
+  useEffect(() => { setSearchHighlight(0); }, [searchQuery]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const pickSuggestion = (s: StockData) => {
+    setSelectedStock(s);           // open stock detail modal
+    setSearchQuery('');
+    setSearchFocused(false);
+  };
+
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!searchSuggestions.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSearchHighlight((i) => Math.min(i + 1, searchSuggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSearchHighlight((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      pickSuggestion(searchSuggestions[searchHighlight] ?? searchSuggestions[0]);
+    } else if (e.key === 'Escape') {
+      setSearchFocused(false);
+    }
+  };
 
   const toggleSF = (key: keyof SpecialFilters) =>
     setSpecialFilters({ ...specialFilters, [key]: !specialFilters[key] });
@@ -126,24 +190,60 @@ export function ControlBar() {
 
       {/* ── Row 0: search + theme + stock manager ── */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex items-center">
+        <div className="relative flex items-center" ref={searchBoxRef}>
           <span className="absolute left-2 text-text-t text-xs pointer-events-none">🔍</span>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜尋代號或名稱..."
+            onFocus={() => setSearchFocused(true)}
+            onKeyDown={onSearchKeyDown}
+            placeholder="搜尋代號、名稱、題材..."
+            autoComplete="off"
             className="w-56 bg-dash-bg border border-border-c rounded pl-7 pr-7 py-1.5 text-xs text-text-p
                        placeholder:text-text-t focus:outline-none focus:border-accent font-mono"
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => { setSearchQuery(''); setSearchFocused(false); }}
               className="absolute right-2 text-text-t hover:text-text-p text-xs"
               title="清除搜尋"
             >
               ✕
             </button>
+          )}
+
+          {/* Autocomplete dropdown */}
+          {searchFocused && searchSuggestions.length > 0 && (
+            <div className="absolute top-full left-0 mt-1 w-80 max-h-80 overflow-y-auto
+                            bg-card-bg border border-accent/50 rounded-lg shadow-2xl z-50
+                            scrollbar-thin scrollbar-thumb-white/20">
+              {searchSuggestions.map((s, i) => (
+                <button
+                  key={s.symbol}
+                  onMouseDown={(e) => { e.preventDefault(); pickSuggestion(s); }}
+                  onMouseEnter={() => setSearchHighlight(i)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-xs
+                              border-b border-border-c/40 last:border-b-0 transition-colors
+                              ${i === searchHighlight ? 'bg-accent/15' : 'hover:bg-card-hover'}`}
+                >
+                  <span className="font-mono font-bold text-accent shrink-0 w-10">{s.symbol}</span>
+                  <span className="text-white font-semibold truncate flex-1">{s.name}</span>
+                  <span className="font-mono text-[10px] text-text-t shrink-0">
+                    {layerShortCode(s.layer)}
+                  </span>
+                  {s.sub_category && (
+                    <span className="text-[10px] text-text-s truncate max-w-[110px]"
+                          title={s.sub_category}>
+                      {s.sub_category}
+                    </span>
+                  )}
+                </button>
+              ))}
+              <div className="px-2.5 py-1 text-[10px] text-text-t bg-dash-bg/70 border-t border-border-c/40">
+                ↑↓ 選擇 · Enter 開啟 · Esc 關閉
+              </div>
+            </div>
           )}
         </div>
         <span className="text-sm font-semibold text-white ml-2">主題:</span>

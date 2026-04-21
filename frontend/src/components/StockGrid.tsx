@@ -125,6 +125,17 @@ export function StockGrid({
     if (sf.allTimeHigh) {
       result = result.filter((s) => s.is_all_time_high);
     }
+    if (sf.gapUp || sf.gapDown) {
+      result = result.filter((s) => {
+        const k = s.klines;
+        if (k.length < 2) return false;
+        const today = k[k.length - 1];
+        const prev  = k[k.length - 2];
+        if (sf.gapUp   && today.low  > prev.high) return true;
+        if (sf.gapDown && today.high < prev.low)  return true;
+        return false;
+      });
+    }
 
     // Price range filter
     if (priceFilter.enabled && (priceFilter.min !== null || priceFilter.max !== null)) {

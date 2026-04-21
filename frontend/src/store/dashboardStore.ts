@@ -55,6 +55,8 @@ const DEFAULT_SPECIAL: SpecialFilters = {
   aboveMonthlyMA: false,
   aboveQuarterlyMA: false,
   allTimeHigh: false,
+  gapUp: false,
+  gapDown: false,
 };
 
 const DEFAULT_INSTI: InstiFilters = {

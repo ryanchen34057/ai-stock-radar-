@@ -106,6 +106,8 @@ export interface SpecialFilters {
   aboveMonthlyMA: boolean;     // price > MA20
   aboveQuarterlyMA: boolean;   // price > MA60
   allTimeHigh: boolean;        // today close = all-time high
+  gapUp: boolean;              // 跳空向上: today low > yesterday high
+  gapDown: boolean;            // 跳空向下: today high < yesterday low
 }
 
 export interface RangeFilter {

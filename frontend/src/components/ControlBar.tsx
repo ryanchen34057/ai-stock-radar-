@@ -335,6 +335,14 @@ export function ControlBar() {
           activeClass="bg-yellow-500/20 text-yellow-400 border-yellow-500/50">
           收盤創歷史新高 ATH
         </FilterPill>
+        <FilterPill active={specialFilters.gapUp} onClick={() => toggleSF('gapUp')}
+          activeClass="bg-tw-down/20 text-tw-down border-tw-down/50">
+          跳空向上 ↑
+        </FilterPill>
+        <FilterPill active={specialFilters.gapDown} onClick={() => toggleSF('gapDown')}
+          activeClass="bg-tw-up/20 text-tw-up border-tw-up/50">
+          跳空向下 ↓
+        </FilterPill>
       </div>
 
       {/* ── Row 3b: price & PE range filters ── */}

@@ -269,18 +269,97 @@ export function LayerCards() {
   const allCardsList = [allCard, ...layerCards];
 
   return (
-    <div className="grid gap-2.5 py-1 px-0.5
-                    grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-      {allCardsList.map((data, idx) => (
-        <LayerCard
-          key={data.layerId ?? `all-${idx}`}
-          data={data}
-          selected={data.layerId === null
-            ? selectedLayers.length === 0
-            : selectedLayers.includes(data.layerId)}
-          onClick={() => data.layerId === null ? clearLayers() : toggleLayer(data.layerId)}
-        />
-      ))}
+    <div className="space-y-2">
+      {/* Fund-flow ranking: which layers institutions are buying vs selling */}
+      <FundFlowRanking layers={layerCards} onPick={toggleLayer} />
+
+      {/* Existing layer card grid */}
+      <div className="grid gap-2.5 py-1 px-0.5
+                      grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
+        {allCardsList.map((data, idx) => (
+          <LayerCard
+            key={data.layerId ?? `all-${idx}`}
+            data={data}
+            selected={data.layerId === null
+              ? selectedLayers.length === 0
+              : selectedLayers.includes(data.layerId)}
+            onClick={() => data.layerId === null ? clearLayers() : toggleLayer(data.layerId)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * Horizontal "hot / cold" ranking strip above the layer cards.
+ * Ranks every layer by 三大法人合計 (foreign + trust + dealer net) and shows
+ * the top 5 inflows (money flowing IN) and top 5 outflows (flowing OUT).
+ * Clicking a chip filters the dashboard grid to that layer.
+ */
+function FundFlowRanking({
+  layers, onPick,
+}: { layers: CardData[]; onPick: (layerId: number) => void }) {
+  const ranked = useMemo(() => {
+    return layers
+      .filter((l) => l.insti && l.insti.total_net !== 0 && l.layerId !== null)
+      .map((l) => ({
+        layerId: l.layerId!,
+        name: l.name,
+        total: l.insti!.total_net,
+        avgChange: l.avgChange,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [layers]);
+
+  if (ranked.length === 0) return null;
+
+  const inflow  = ranked.filter((r) => r.total > 0).slice(0, 5);
+  const outflow = ranked.filter((r) => r.total < 0).slice(-5).reverse();
+
+  const Row = ({ title, items, emoji, tone }: {
+    title: string;
+    items: typeof ranked;
+    emoji: string;
+    tone: 'up' | 'down';
+  }) => {
+    if (items.length === 0) return null;
+    const textColor = tone === 'up' ? 'text-tw-up' : 'text-tw-down';
+    const bgColor   = tone === 'up' ? 'bg-tw-up/10' : 'bg-tw-down/10';
+    const border    = tone === 'up' ? 'border-tw-up/40' : 'border-tw-down/40';
+    return (
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${bgColor} ${border}`}>
+        <span className="text-xs font-semibold whitespace-nowrap text-text-p">
+          {emoji} {title}
+        </span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {items.map((r) => (
+            <button
+              key={r.layerId}
+              onClick={() => onPick(r.layerId)}
+              className={`flex items-baseline gap-1.5 px-2 py-0.5 rounded border transition-colors
+                          bg-dash-bg/60 border-white/20 hover:border-white/50`}
+              title={`${layerShortCode(r.layerId)} · ${r.name}`}
+            >
+              <span className="font-mono font-bold text-[10px] text-text-s">
+                {layerShortCode(r.layerId)}
+              </span>
+              <span className="text-xs text-white font-semibold">{r.name}</span>
+              <span className={`font-mono font-bold text-xs tabular-nums ${textColor}`}>
+                {fmtNet(r.total)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Row title="資金流入" items={inflow}  emoji="💰" tone="up" />
+      <Row title="資金流出" items={outflow} emoji="💸" tone="down" />
     </div>
   );
 }

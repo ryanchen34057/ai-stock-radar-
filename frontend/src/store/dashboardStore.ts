@@ -57,6 +57,8 @@ const DEFAULT_SPECIAL: SpecialFilters = {
   allTimeHigh: false,
   gapUp: false,
   gapDown: false,
+  pullbackReclaim10: false,
+  pullbackReclaim20: false,
 };
 
 const DEFAULT_INSTI: InstiFilters = {

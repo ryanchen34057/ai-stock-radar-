@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
-import { getSignal, getMaDistance } from '../utils/calcMA';
+import { getSignal, getMaDistance, calculateMAFull } from '../utils/calcMA';
 import { getDisplayPe } from '../utils/formatPe';
 import { calculateKD, getKDTrend } from '../utils/calcKD';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -135,6 +135,34 @@ export function StockGrid({
         if (sf.gapDown && today.high < prev.low)  return true;
         return false;
       });
+    }
+    // "Pullback to MA, reclaimed today" — classic buy signal:
+    //   1) today close > today MA
+    //   2) at least once in the last LOOKBACK_DAYS trading days the close
+    //      was <= the MA value AT THAT DAY (used full kline history to
+    //      compute the per-day MA, not today's snapshot MA).
+    if (sf.pullbackReclaim10 || sf.pullbackReclaim20) {
+      const LOOKBACK_DAYS = 5;
+      const testReclaim = (s: StockData, period: 10 | 20): boolean => {
+        const k = s.klines;
+        if (k.length < period + LOOKBACK_DAYS) return false;
+        const closes = k.map((x) => x.close);
+        const mas = calculateMAFull(closes, period);
+        const last = k.length - 1;
+        const todayClose = closes[last];
+        const todayMA    = mas[last];
+        if (todayMA === null || todayClose <= todayMA) return false;
+        // Scan the preceding LOOKBACK_DAYS bars for a pullback touch
+        for (let i = last - 1; i >= Math.max(0, last - LOOKBACK_DAYS); i--) {
+          const ma = mas[i]; const c = closes[i];
+          if (ma !== null && c <= ma) return true;
+        }
+        return false;
+      };
+      result = result.filter((s) =>
+        (sf.pullbackReclaim10 && testReclaim(s, 10)) ||
+        (sf.pullbackReclaim20 && testReclaim(s, 20))
+      );
     }
 
     // Price range filter

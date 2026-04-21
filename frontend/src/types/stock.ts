@@ -108,6 +108,8 @@ export interface SpecialFilters {
   allTimeHigh: boolean;        // today close = all-time high
   gapUp: boolean;              // 跳空向上: today low > yesterday high
   gapDown: boolean;            // 跳空向下: today high < yesterday low
+  pullbackReclaim10: boolean;  // last 5d pulled back to / below MA10, today close > MA10
+  pullbackReclaim20: boolean;  // last 5d pulled back to / below MA20, today close > MA20
 }
 
 export interface RangeFilter {

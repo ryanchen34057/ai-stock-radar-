@@ -24,30 +24,77 @@ cd /d "%~dp0"
 :: ---- Python check ----
 echo.
 echo [1/5] Checking Python...
-where python >nul 2>nul
-if errorlevel 1 (
-    echo   Python not found. Please install first:
-    echo     1. https://www.python.org/downloads/  (Python 3.11+)
-    echo     2. IMPORTANT: check "Add Python to PATH" during install
-    echo     3. Re-run this script after installing
+
+:: Prefer py -3.12 launcher, fallback to python3.12 in PATH, fallback to any python 3.11+
+set "PY_CMD="
+py -3.12 --version 1>nul 2>&1
+if not errorlevel 1 set "PY_CMD=py -3.12"
+if not defined PY_CMD (
+    where python3.12 1>nul 2>&1
+    if not errorlevel 1 set "PY_CMD=python3.12"
+)
+if not defined PY_CMD (
+    where python 1>nul 2>&1
+    if not errorlevel 1 set "PY_CMD=python"
+)
+
+if not defined PY_CMD (
+    echo   [FAIL] No Python found on this system.
+    echo     Install Python 3.12: https://www.python.org/downloads/release/python-3127/
+    echo     IMPORTANT: check "Add Python to PATH" during install.
     pause
     exit /b 1
 )
-python --version
-echo   [OK] Python installed
+
+echo   Using: %PY_CMD%
+%PY_CMD% --version
+if errorlevel 1 (
+    echo   [FAIL] %PY_CMD% exists but failed to run.
+    pause
+    exit /b 1
+)
+
+:: Warn if not 3.12 (3.14 misses wheels, 3.10- may miss newer features)
+for /f "tokens=2" %%v in ('%PY_CMD% --version 2^>^&1') do set "PY_VER=%%v"
+echo   Detected Python %PY_VER%
+echo %PY_VER% | findstr /r "^3\.1[12]\." >nul
+if errorlevel 1 (
+    echo.
+    echo   [WARN] Python %PY_VER% may have missing package wheels.
+    echo   Recommended: Python 3.12.  Continue anyway? Press Ctrl+C to abort.
+    pause
+)
+echo   [OK] Python ready
 
 :: ---- Node check ----
 echo.
 echo [2/5] Checking Node.js...
-where node >nul 2>nul
-if errorlevel 1 (
-    echo   Node.js not found. Please install first:
-    echo     1. https://nodejs.org/  (LTS version)
-    echo     2. Next-next-finish install
-    echo     3. Re-run this script after installing
+
+:: Try PATH first, then common install locations
+set "NODE_DIR="
+where node 1>nul 2>&1
+if not errorlevel 1 (
+    for /f "delims=" %%p in ('where node') do (
+        if not defined NODE_DIR (
+            for %%d in ("%%~dpp") do set "NODE_DIR=%%~fd"
+        )
+    )
+)
+if not defined NODE_DIR if exist "%ProgramFiles%\nodejs\node.exe" set "NODE_DIR=%ProgramFiles%\nodejs"
+if not defined NODE_DIR if exist "%ProgramFiles(x86)%\nodejs\node.exe" set "NODE_DIR=%ProgramFiles(x86)%\nodejs"
+if not defined NODE_DIR if exist "%LOCALAPPDATA%\Programs\nodejs\node.exe" set "NODE_DIR=%LOCALAPPDATA%\Programs\nodejs"
+
+if not defined NODE_DIR (
+    echo   [FAIL] Node.js not found on this system.
+    echo     Install Node.js LTS: https://nodejs.org/
+    echo     IMPORTANT: keep default "Add to PATH" checked during install.
     pause
     exit /b 1
 )
+
+:: Prepend node dir to PATH for the rest of this script so node/npm always work
+set "PATH=%NODE_DIR%;%PATH%"
+echo   Using: %NODE_DIR%
 node --version
 echo   [OK] Node.js installed
 
@@ -55,8 +102,8 @@ echo   [OK] Node.js installed
 echo.
 echo [3/5] Installing backend Python packages (3-5 min)...
 cd backend
-python -m pip install --upgrade pip >nul
-python -m pip install -r requirements.txt
+%PY_CMD% -m pip install --upgrade pip >nul
+%PY_CMD% -m pip install -r requirements.txt
 if errorlevel 1 (
     echo   [FAIL] Python package install failed - check internet
     pause
@@ -88,7 +135,7 @@ cd ..
 echo.
 echo [5/5] Installing Playwright Chromium (for FB scraping)...
 cd backend
-python -m playwright install chromium
+%PY_CMD% -m playwright install chromium
 cd ..
 echo   [OK] Playwright installed
 

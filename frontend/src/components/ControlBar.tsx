@@ -443,6 +443,10 @@ export function ControlBar() {
           activeClass="bg-tw-up/20 text-tw-up border-tw-up/50">
           跳空向下 ↓
         </FilterPill>
+        <FilterPill active={specialFilters.pullbackReclaim5} onClick={() => toggleSF('pullbackReclaim5')}
+          activeClass="bg-tw-down/20 text-tw-down border-tw-down/50">
+          回測5MA反彈
+        </FilterPill>
         <FilterPill active={specialFilters.pullbackReclaim10} onClick={() => toggleSF('pullbackReclaim10')}
           activeClass="bg-tw-down/20 text-tw-down border-tw-down/50">
           回測10MA反彈

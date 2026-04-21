@@ -141,9 +141,9 @@ export function StockGrid({
     //   2) at least once in the last LOOKBACK_DAYS trading days the close
     //      was <= the MA value AT THAT DAY (used full kline history to
     //      compute the per-day MA, not today's snapshot MA).
-    if (sf.pullbackReclaim10 || sf.pullbackReclaim20) {
+    if (sf.pullbackReclaim5 || sf.pullbackReclaim10 || sf.pullbackReclaim20) {
       const LOOKBACK_DAYS = 5;
-      const testReclaim = (s: StockData, period: 10 | 20): boolean => {
+      const testReclaim = (s: StockData, period: 5 | 10 | 20): boolean => {
         const k = s.klines;
         if (k.length < period + LOOKBACK_DAYS) return false;
         const closes = k.map((x) => x.close);
@@ -160,6 +160,7 @@ export function StockGrid({
         return false;
       };
       result = result.filter((s) =>
+        (sf.pullbackReclaim5  && testReclaim(s, 5))  ||
         (sf.pullbackReclaim10 && testReclaim(s, 10)) ||
         (sf.pullbackReclaim20 && testReclaim(s, 20))
       );

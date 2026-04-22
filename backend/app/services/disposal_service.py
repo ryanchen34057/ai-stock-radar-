@@ -43,29 +43,42 @@ def _parse_roc_range(raw: str) -> tuple[str, str] | None:
 # ── Data sources ──────────────────────────────────────────────────────────────
 
 def _fetch_twse() -> list[dict]:
-    """TWSE 注意/處置公告 (last 60 days)."""
+    """
+    TWSE 處置公告 — uses the official OpenAPI endpoint, which is the
+    only reliable one (the legacy /rwd/zh/announcement/punish route
+    silently times out from many networks).
+
+    Response schema (partial):
+        [{
+            "Code": "2498", "Name": "宏達電",
+            "DispositionPeriod": "115/04/17～115/04/30",
+            "DispositionMeasures": "第一次處置",
+            "ReasonsOfDisposition": "連續三次",
+            ...
+        }, ...]
+    """
     try:
         r = requests.get(
-            "https://www.twse.com.tw/rwd/zh/announcement/punish",
-            params={"response": "json"},
-            headers=HEADERS, timeout=15, verify=False,
+            "https://openapi.twse.com.tw/v1/announcement/punish",
+            headers=HEADERS, timeout=20, verify=False,
         )
+        if r.status_code != 200:
+            return []
         data = r.json()
-        if data.get("stat") != "OK":
+        if not isinstance(data, list):
             return []
         out = []
-        for row in data.get("data", []):
-            if len(row) < 8:
+        for row in data:
+            if not isinstance(row, dict):
                 continue
-            symbol = str(row[2]).strip()
-            if not symbol or not symbol.isdigit():
-                continue  # Skip ETNs / warrants (they have alphanumeric codes)
-            if len(symbol) > 4:
-                continue  # 4-digit TW stocks only
-            name = str(row[3]).strip()
-            period = str(row[6]).strip()
-            measure = str(row[7]).strip()
-            reason = str(row[5]).strip() if len(row) > 5 else ''
+            symbol = str(row.get("Code", "")).strip()
+            # Pure 4-digit symbols only — skip warrants (6-digit), ETNs, etc.
+            if not symbol.isdigit() or len(symbol) != 4:
+                continue
+            name = str(row.get("Name", "")).strip()
+            period = str(row.get("DispositionPeriod", "")).strip()
+            measure = str(row.get("DispositionMeasures", "")).strip()
+            reason = str(row.get("ReasonsOfDisposition", "")).strip()
             date_range = _parse_roc_range(period)
             if not date_range:
                 continue
@@ -87,43 +100,52 @@ def _fetch_twse() -> list[dict]:
 
 def _fetch_tpex() -> list[dict]:
     """
-    TPEx 處置公告. Endpoint changed a few times; we try the most recent one
-    and fall back silently on failure (TWSE covers most active names anyway).
+    TPEx 處置公告 — uses the TPEx OpenAPI endpoint.
+
+    Response schema:
+        [{
+            "Date": "1150422",
+            "SecuritiesCompanyCode": "3221", "CompanyName": "台嘉碩",
+            "DispositionPeriod": "1150423~1150507",
+            "DispositionReasons": "...",
+            "DisposalCondition": "...",
+        }, ...]
+
+    Note DispositionPeriod here uses solid ROC format (YYYMMDD~YYYMMDD)
+    without slashes — different from TWSE. We normalise both.
     """
     try:
         r = requests.get(
-            "https://www.tpex.org.tw/www/zh-tw/bulletin/disposal",
-            params={"response": "json"},
+            "https://www.tpex.org.tw/openapi/v1/tpex_disposal_information",
             headers={**HEADERS, "Referer": "https://www.tpex.org.tw"},
-            timeout=15, verify=False,
+            timeout=20, verify=False,
         )
         if r.status_code != 200:
             return []
-        data = r.json() if r.headers.get("content-type", "").lower().startswith("application/json") else None
-        if not isinstance(data, dict):
+        data = r.json()
+        if not isinstance(data, list):
             return []
-        tables = data.get("tables") or []
-        if not tables:
-            return []
-        rows = tables[0].get("data") or []
         out = []
-        for row in rows:
-            if not isinstance(row, list) or len(row) < 5:
+        for row in data:
+            if not isinstance(row, dict):
                 continue
-            # Layout: [date, symbol, name, ..., period]
-            symbol = str(row[1]).strip()
+            symbol = str(row.get("SecuritiesCompanyCode", "")).strip()
             if not symbol.isdigit() or len(symbol) != 4:
                 continue
-            name = str(row[2]).strip()
-            # Find first string matching a date range
-            period = next((str(c) for c in row if re.search(r"\d{2,3}/\d{1,2}/\d{1,2}[～~]\d{2,3}/\d{1,2}/\d{1,2}", str(c))), "")
+            name = str(row.get("CompanyName", "")).strip()
+            period = str(row.get("DispositionPeriod", "")).strip()
+            # TPEx format "1150423~1150507" — convert to "115/4/23～115/5/7"
+            m = re.match(r"^(\d{7})[~～](\d{7})$", period)
+            if m:
+                a, b = m.group(1), m.group(2)
+                period = f"{a[:3]}/{int(a[3:5])}/{int(a[5:7])}～{b[:3]}/{int(b[3:5])}/{int(b[5:7])}"
             date_range = _parse_roc_range(period)
             if not date_range:
                 continue
             out.append({
                 "symbol": symbol,
                 "name": name,
-                "reason": "",
+                "reason": str(row.get("DispositionReasons", "")).strip()[:60],
                 "measure": "處置",
                 "start_date": date_range[0],
                 "end_date":   date_range[1],

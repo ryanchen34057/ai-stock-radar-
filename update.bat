@@ -135,7 +135,7 @@ if "%OLD_REQ%"=="%NEW_REQ%" (
 ) else (
     echo   requirements.txt changed - installing new packages...
     cd backend
-    %PY_CMD% -m pip install -r requirements.txt
+    %PY_CMD% -m pip install --upgrade -r requirements.txt
     if errorlevel 1 (
         echo   [FAIL] pip install failed
         pause
@@ -143,6 +143,21 @@ if "%OLD_REQ%"=="%NEW_REQ%" (
     )
     cd ..
     echo   [OK] Backend packages updated
+)
+
+:: Import sanity check — heals numpy/pandas ABI mismatch silently so the
+:: user never has to google "numpy.dtype size changed".
+%PY_CMD% -c "import fastapi, uvicorn, pandas, numpy, yfinance, playwright, apscheduler" 1>nul 2>nul
+if errorlevel 1 (
+    echo   [WARN] Some backend imports failed - force-reinstalling core stack...
+    %PY_CMD% -m pip install --upgrade --force-reinstall --no-cache-dir numpy pandas yfinance
+    %PY_CMD% -c "import fastapi, uvicorn, pandas, numpy, yfinance, playwright, apscheduler" 1>nul 2>nul
+    if errorlevel 1 (
+        echo   [FAIL] Import check still failing - run setup.bat for a fresh install.
+        pause
+        exit /b 1
+    )
+    echo   [OK] Core stack repaired
 )
 
 echo.

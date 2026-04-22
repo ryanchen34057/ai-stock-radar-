@@ -103,13 +103,38 @@ echo.
 echo [3/5] Installing backend Python packages (3-5 min)...
 cd backend
 %PY_CMD% -m pip install --upgrade pip >nul
-%PY_CMD% -m pip install -r requirements.txt
+%PY_CMD% -m pip install --upgrade -r requirements.txt
 if errorlevel 1 (
     echo   [FAIL] Python package install failed - check internet
     pause
     exit /b 1
 )
-echo   [OK] Python packages installed
+
+:: Import sanity check — catches numpy/pandas ABI mismatches or half-installed
+:: envs that `pip install` silently leaves behind. If any critical module
+:: fails to import, force-reinstall the common ABI-sensitive pair so users
+:: don't have to debug cryptic 'size changed' errors themselves.
+echo   Verifying installed packages import cleanly...
+%PY_CMD% -c "import fastapi, uvicorn, pandas, numpy, yfinance, playwright, apscheduler" 1>nul 2>nul
+if errorlevel 1 (
+    echo   [WARN] Import sanity check failed - likely a numpy/pandas ABI
+    echo          mismatch. Force-reinstalling the core stack...
+    %PY_CMD% -m pip install --upgrade --force-reinstall --no-cache-dir numpy pandas yfinance
+    if errorlevel 1 (
+        echo   [FAIL] Force reinstall failed
+        pause
+        exit /b 1
+    )
+    %PY_CMD% -c "import fastapi, uvicorn, pandas, numpy, yfinance, playwright, apscheduler"
+    if errorlevel 1 (
+        echo   [FAIL] Import check still failing after force-reinstall.
+        echo         Run:  %PY_CMD% -c "import pandas"
+        echo         for the specific error.
+        pause
+        exit /b 1
+    )
+)
+echo   [OK] Python packages installed and verified
 cd ..
 
 :: ---- Frontend deps ----

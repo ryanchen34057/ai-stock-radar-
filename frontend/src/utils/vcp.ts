@@ -31,32 +31,41 @@ export interface VcpAnalysis {
 const BASE_LOOKBACK = 65;
 const PIVOT_WINDOW = 5;
 
-// ── Trend Template (Minervini) ──────────────────────────────────────────────
+// ── Trend Template (Minervini — adapted to TW market MA periods) ───────────
+// Taiwan-market conventional MAs are 60 / 120 / 240. We substitute:
+//   MA60 → MA50 slot
+//   MA120 → MA150 slot
+//   MA240 → MA200 slot
+// The backend pre-computes these on the FULL 5-year kline history in the DB,
+// so we prefer stock.ma['...'] over computing from the limited frontend slice.
 function passesTrendTemplate(stock: StockData): boolean {
-  const closes = stock.klines.map((k) => k.close);
-  if (closes.length < 200) return false;
-
-  const price = stock.current_price ?? closes[closes.length - 1];
+  const price = stock.current_price;
   if (price === null || price <= 0) return false;
 
+  const ma60  = stock.ma['60']  ?? null;
+  const ma120 = stock.ma['120'] ?? null;
+  const ma240 = stock.ma['240'] ?? null;
+  if (ma60 === null || ma120 === null || ma240 === null) return false;
+
+  // "MA240 trending up" — approximate by computing MA240 from 20 bars ago
+  // using the frontend klines slice. Requires >= 260 closes.
+  const closes = stock.klines.map((k) => k.close);
+  if (closes.length < 260) return false;
   const mean = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
-  const ma50  = mean(closes.slice(-50));
-  const ma150 = mean(closes.slice(-150));
-  const ma200 = mean(closes.slice(-200));
-  const ma200_20ago = closes.length >= 220 ? mean(closes.slice(-220, -20)) : ma200;
+  const ma240_20ago = mean(closes.slice(-260, -20));
 
   const last252 = closes.slice(-Math.min(252, closes.length));
   const low52w  = Math.min(...last252);
   const high52w = Math.max(...last252);
 
   return (
-    price > ma150 &&
-    price > ma200 &&
-    ma150 > ma200 &&
-    ma200 > ma200_20ago &&             // MA200 trending up
-    ma50 > ma150 &&
-    price > ma50 &&
-    price >= low52w * 1.30 &&          // at least 30% above 52-week low
+    price > ma120 &&
+    price > ma240 &&
+    ma120 > ma240 &&
+    ma240 > ma240_20ago &&             // long-term MA trending up
+    ma60 > ma120 &&
+    price > ma60 &&
+    price >= low52w * 1.30 &&          // >= 30% above 52-week low
     price >= high52w * 0.75            // within 25% of 52-week high
   );
 }

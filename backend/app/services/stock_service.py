@@ -239,8 +239,11 @@ def get_dashboard_data() -> dict:
             ).fetchall()
             klines_all = list(reversed([dict(r) for r in kline_rows]))
 
-            # Last 60 for display
-            klines_display = klines_all[-60:] if len(klines_all) > 60 else klines_all
+            # Last ~1 year (260 bars) for display. The main card only draws
+            # the tail 60, but frontend filters like VCP candidate scan need
+            # enough history to check MA200 trend + 52-week high/low +
+            # pivot detection over a 65-bar base.
+            klines_display = klines_all[-260:] if len(klines_all) > 260 else klines_all
 
             closes = [k["close"] for k in klines_all]
             current = klines_all[-1] if klines_all else None

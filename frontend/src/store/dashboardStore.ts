@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, VcpFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 
 interface DashboardState {
   // Data
@@ -13,7 +13,7 @@ interface DashboardState {
   selectedMA: MAPeriod;
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
-  vcpFilter: VcpFilter;
+  breakoutPendingFilter: BreakoutPendingFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -34,7 +34,7 @@ interface DashboardState {
   setSelectedMA: (ma: MAPeriod) => void;
   setAlertFilter: (filter: AlertFilter) => void;
   setMAProximityFilter: (f: MAProximityFilter) => void;
-  setVcpFilter: (f: VcpFilter) => void;
+  setBreakoutPendingFilter: (f: BreakoutPendingFilter) => void;
   setSpecialFilters: (f: SpecialFilters) => void;
   setInstiFilters: (f: InstiFilters) => void;
   setPriceFilter: (f: RangeFilter) => void;
@@ -90,7 +90,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectedMA: 60,
   alertFilter: 'all',
   maProximityFilter: { enabled: false, ma: 20, direction: 'above', threshold: 3 },
-  vcpFilter: { enabled: false },
+  breakoutPendingFilter: { enabled: false, lookback: 60, threshold: 5, minBaseDays: 15 },
   specialFilters: DEFAULT_SPECIAL,
   instiFilters: DEFAULT_INSTI,
   priceFilter: { enabled: false, min: null, max: null },
@@ -111,7 +111,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setSelectedMA: (selectedMA) => set({ selectedMA }),
   setAlertFilter: (alertFilter) => set({ alertFilter }),
   setMAProximityFilter: (maProximityFilter) => set({ maProximityFilter }),
-  setVcpFilter: (vcpFilter) => set({ vcpFilter }),
+  setBreakoutPendingFilter: (breakoutPendingFilter) => set({ breakoutPendingFilter }),
   setSpecialFilters: (specialFilters) => set({ specialFilters }),
   setInstiFilters: (instiFilters) => set({ instiFilters }),
   setPriceFilter: (priceFilter) => set({ priceFilter }),

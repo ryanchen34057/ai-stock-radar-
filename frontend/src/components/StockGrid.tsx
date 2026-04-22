@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, VcpFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance, calculateMAFull } from '../utils/calcMA';
-import { analyzeVCP, type VcpAnalysis } from '../utils/vcp';
+import { analyzeBreakoutPending, type BreakoutPending } from '../utils/breakoutPending';
 import { getDisplayPe } from '../utils/formatPe';
 import { calculateKD, getKDTrend } from '../utils/calcKD';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -14,7 +14,7 @@ interface Props {
   selectedMA: MAPeriod;
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
-  vcpFilter: VcpFilter;
+  breakoutPendingFilter: BreakoutPendingFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -28,7 +28,7 @@ interface Props {
 }
 
 export function StockGrid({
-  stocks, selectedMA, alertFilter, maProximityFilter, vcpFilter,
+  stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter,
   specialFilters, instiFilters, priceFilter, peFilter, kdFilters,
   themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
@@ -224,11 +224,15 @@ export function StockGrid({
       }
     }
 
-    // VCP candidate scan — Minervini pattern (trend template + contracting
-    // base + volume dry-up). Computed last so it runs on the already-filtered
-    // universe and skips the O(N·klines) work when off.
-    if (vcpFilter.enabled) {
-      result = result.filter((s) => analyzeVCP(s) !== null);
+    // Breakout-pending scan — stocks sitting in a base (W / U / cup / flat)
+    // near their prior high, about to attempt a breakout.
+    if (breakoutPendingFilter.enabled) {
+      result = result.filter((s) => analyzeBreakoutPending(
+        s,
+        breakoutPendingFilter.lookback,
+        breakoutPendingFilter.threshold,
+        breakoutPendingFilter.minBaseDays,
+      ) !== null);
     }
 
     // Sort
@@ -251,19 +255,23 @@ export function StockGrid({
           return 0;
       }
     });
-  }, [stocks, selectedMA, alertFilter, maProximityFilter, vcpFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
+  }, [stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
 
-  // Pre-compute VCP analyses for the cards that need them so we don't
-  // re-run the pivot/contraction logic twice per render.
-  const vcpBySymbol = useMemo<Map<string, VcpAnalysis>>(() => {
-    const m = new Map<string, VcpAnalysis>();
-    if (!vcpFilter.enabled) return m;
+  // Pre-compute breakout analyses so cards don't re-run the logic twice.
+  const breakoutBySymbol = useMemo<Map<string, BreakoutPending>>(() => {
+    const m = new Map<string, BreakoutPending>();
+    if (!breakoutPendingFilter.enabled) return m;
     for (const s of filtered) {
-      const a = analyzeVCP(s);
+      const a = analyzeBreakoutPending(
+        s,
+        breakoutPendingFilter.lookback,
+        breakoutPendingFilter.threshold,
+        breakoutPendingFilter.minBaseDays,
+      );
       if (a) m.set(s.symbol, a);
     }
     return m;
-  }, [filtered, vcpFilter.enabled]);
+  }, [filtered, breakoutPendingFilter]);
 
   // ── Group by layer → sub_category ──────────────────────────────────────
   // Tier 1 (龍頭) sorts first within each sub-group so it appears leftmost.
@@ -359,7 +367,7 @@ export function StockGrid({
                   stock={stock}
                   selectedMA={selectedMA}
                   insti={insti?.stocks[stock.symbol] ?? null}
-                  vcp={vcpBySymbol.get(stock.symbol)}
+                  breakout={breakoutBySymbol.get(stock.symbol)}
                   onClick={() => setSelectedStock(stock)}
                 />
               ))}

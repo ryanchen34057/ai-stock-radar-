@@ -86,7 +86,7 @@ export function ControlBar() {
     selectedMA, setSelectedMA,
     alertFilter, setAlertFilter,
     maProximityFilter, setMAProximityFilter,
-    vcpFilter, setVcpFilter,
+    breakoutPendingFilter, setBreakoutPendingFilter,
     specialFilters, setSpecialFilters,
     instiFilters, setInstiFilters,
     priceFilter, setPriceFilter,
@@ -414,23 +414,58 @@ export function ControlBar() {
         )}
       </div>
 
-      {/* ── Row 2b: VCP candidate scan (Minervini) ── */}
+      {/* ── Row 2b: 快破前高 (W / U / cup / flat base breakout-pending) ── */}
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1.5 cursor-pointer select-none">
           <input
             type="checkbox"
-            checked={vcpFilter.enabled}
-            onChange={(e) => setVcpFilter({ ...vcpFilter, enabled: e.target.checked })}
+            checked={breakoutPendingFilter.enabled}
+            onChange={(e) => setBreakoutPendingFilter({ ...breakoutPendingFilter, enabled: e.target.checked })}
             className="accent-accent w-3.5 h-3.5"
           />
-          <span className="text-sm font-semibold text-white">VCP 候選股</span>
+          <span className="text-sm font-semibold text-white">快破前高</span>
         </label>
-        <span className="text-xs text-text-t">
-          Minervini 趨勢模板 + 至少 2 次收縮 + 最後收縮 &lt; 10% + 量萎縮
-        </span>
-        {vcpFilter.enabled && (
+        <span className="text-xs text-text-t">最近</span>
+        <select
+          value={breakoutPendingFilter.lookback}
+          disabled={!breakoutPendingFilter.enabled}
+          onChange={(e) => setBreakoutPendingFilter({ ...breakoutPendingFilter, lookback: Number(e.target.value) })}
+          className="text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                     focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {[30, 60, 120, 240].map((d) => <option key={d} value={d}>{d} 日</option>)}
+        </select>
+        <span className="text-xs text-text-t">高點的</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number" min={0.1} max={20} step={0.5}
+            value={breakoutPendingFilter.threshold}
+            disabled={!breakoutPendingFilter.enabled}
+            onChange={(e) => setBreakoutPendingFilter({
+              ...breakoutPendingFilter, threshold: Math.max(0.1, parseFloat(e.target.value) || 5),
+            })}
+            className="w-14 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                       text-center focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          <span className="text-xs text-text-t">% 內</span>
+        </div>
+        <span className="text-xs text-text-t">基底至少</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number" min={5} max={100} step={1}
+            value={breakoutPendingFilter.minBaseDays}
+            disabled={!breakoutPendingFilter.enabled}
+            onChange={(e) => setBreakoutPendingFilter({
+              ...breakoutPendingFilter, minBaseDays: Math.max(5, parseInt(e.target.value) || 15),
+            })}
+            className="w-14 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                       text-center focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          <span className="text-xs text-text-t">日</span>
+        </div>
+        {breakoutPendingFilter.enabled && (
           <span className="text-xs text-accent font-mono">
-            ▸ 卡片顯示收縮次數 / 最後收縮 / 距 Pivot · 綠色閃爍＝最佳進場
+            ▸ W / U / 咖啡杯 / 平底基底，現價距 {breakoutPendingFilter.lookback}日高 ≤ {breakoutPendingFilter.threshold}%
           </span>
         )}
       </div>

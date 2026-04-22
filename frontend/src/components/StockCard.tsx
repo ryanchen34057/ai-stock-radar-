@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { StockData, MAPeriod } from '../types/stock';
 import type { InstitutionalStock } from '../hooks/useInstitutional';
-import type { VcpAnalysis } from '../utils/vcp';
+import type { BreakoutPending } from '../utils/breakoutPending';
+import { patternLabel } from '../utils/breakoutPending';
 import { useMASignal } from '../hooks/useMASignal';
 import { MiniKlineChart } from './MiniKlineChart';
 import { formatPrice, formatChange, formatChangePct, formatVolume } from '../utils/formatters';
@@ -13,7 +14,7 @@ interface Props {
   stock: StockData;
   selectedMA: MAPeriod;
   insti: InstitutionalStock | null;
-  vcp?: VcpAnalysis;                // present when VCP filter is on and stock qualifies
+  breakout?: BreakoutPending;       // present when 快破前高 filter is on and stock qualifies
   onClick: () => void;
 }
 
@@ -122,7 +123,7 @@ function InstiRow({ insti }: { insti: InstitutionalStock }) {
   );
 }
 
-export function StockCard({ stock, selectedMA, insti, vcp, onClick }: Props) {
+export function StockCard({ stock, selectedMA, insti, breakout, onClick }: Props) {
   const { signal, badgeType, badgePeriod, maValue, distance } = useMASignal(stock, selectedMA);
   const isUp = (stock.change ?? 0) >= 0;
   const hasData = stock.current_price !== null;
@@ -148,9 +149,9 @@ export function StockCard({ stock, selectedMA, insti, vcp, onClick }: Props) {
     setTimeout(() => setRefetching(false), 30_000);
   };
 
-  // VCP "prime setup" — close to pivot AND volume dry-up → animated green glow
-  const vcpPrime = vcp?.isPrime ?? false;
-  const vcpBorderCls = vcpPrime
+  // "Prime" breakout — within 2% of prior high AND ≥ 2 retests already done
+  const breakoutPrime = breakout ? breakout.gapPct <= 2 && breakout.retests >= 2 : false;
+  const cardBorderCls = breakoutPrime
     ? 'border-tw-up border-2 animate-pulse shadow-[0_0_18px_rgba(0,200,100,0.5)]'
     : `border border-border-c border-l-4 ${SIGNAL_BORDER[signal]}`;
 
@@ -158,7 +159,7 @@ export function StockCard({ stock, selectedMA, insti, vcp, onClick }: Props) {
     <div
       onClick={onClick}
       className={`
-        relative bg-card-bg ${vcpBorderCls}
+        relative bg-card-bg ${cardBorderCls}
         rounded-lg p-3 cursor-pointer
         hover:bg-card-hover transition-colors duration-150
         select-none
@@ -190,46 +191,50 @@ export function StockCard({ stock, selectedMA, insti, vcp, onClick }: Props) {
         )}
       </div>
 
-      {/* VCP info row — only when the candidate passes the scan */}
-      {vcp && (
+      {/* Breakout-pending info — only when 快破前高 filter matches this stock */}
+      {breakout && (
         <div className="flex items-center gap-1.5 mb-1.5 flex-wrap relative z-30">
           <span
             className={`text-[11px] px-1.5 py-0.5 rounded font-bold border font-mono
-              ${vcpPrime
+              ${breakoutPrime
                 ? 'bg-tw-up/30 text-tw-up border-tw-up'
                 : 'bg-purple-500/20 text-purple-300 border-purple-500/50'}`}
-            title={`${vcp.contractionCount} 次波動收縮`}
+            title="基底型態分類（依最低點分布判斷）"
           >
-            VCP · {vcp.contractionCount}T
-          </span>
-          <span
-            className="text-[11px] px-1.5 py-0.5 rounded font-mono bg-white/10 text-text-p border border-white/20"
-            title="最後一次收縮幅度（須 < 10% 才成立）"
-          >
-            末縮 {(vcp.lastContraction * 100).toFixed(1)}%
+            {patternLabel(breakout.pattern)}
           </span>
           <span
             className={`text-[11px] px-1.5 py-0.5 rounded font-mono border
-              ${vcp.distanceToPivotPct < 5
+              ${breakout.gapPct < 2
                 ? 'bg-tw-up/20 text-tw-up border-tw-up/50'
                 : 'bg-white/10 text-text-p border-white/20'}`}
-            title={`Pivot Point ${formatPrice(vcp.pivotPoint)}`}
+            title={`前高 ${formatPrice(breakout.priorHigh)}`}
           >
-            距 Pivot {vcp.distanceToPivotPct >= 0
-              ? `${vcp.distanceToPivotPct.toFixed(1)}%`
-              : `+${Math.abs(vcp.distanceToPivotPct).toFixed(1)}%`}
+            距前高 {breakout.gapPct.toFixed(1)}%
           </span>
-          {vcp.volumeDryUp && (
+          <span
+            className="text-[11px] px-1.5 py-0.5 rounded font-mono bg-white/10 text-text-p border border-white/20"
+            title="前高至今經歷多少交易日的盤整"
+          >
+            基底 {breakout.daysSinceHigh}d
+          </span>
+          {breakout.retests >= 2 && (
             <span
-              className="text-[11px] px-1.5 py-0.5 rounded font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/50"
-              title="近 10 日均量 < 近 50 日均量 × 0.8（量能乾涸）"
+              className="text-[11px] px-1.5 py-0.5 rounded font-bold bg-accent/20 text-accent border border-accent/50"
+              title="現價在前高 98% 以上的 bar 數（測壓次數）"
             >
-              VDU 🌵
+              {breakout.retests}次測壓
             </span>
           )}
-          {vcpPrime && (
+          <span
+            className="text-[11px] px-1.5 py-0.5 rounded font-mono bg-white/5 text-text-t border border-white/10"
+            title="基底最低點與前高的跌深（越淺越接近平底）"
+          >
+            深 {breakout.baseDepth.toFixed(0)}%
+          </span>
+          {breakoutPrime && (
             <span className="text-[11px] px-1.5 py-0.5 rounded font-bold bg-tw-up text-black border border-tw-up">
-              ⚡ 最佳進場
+              ⚡ 即將突破
             </span>
           )}
         </div>

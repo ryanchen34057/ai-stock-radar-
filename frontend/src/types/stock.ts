@@ -102,12 +102,20 @@ export interface MAProximityFilter {
 }
 
 /**
- * VCP (Volatility Contraction Pattern) filter — Minervini-style setup scan.
- * On: show only stocks that pass Trend Template + have >= 2 contracting
- * pullbacks with the last contraction < 10% + volume dry-up.
+ * "Breakout-pending" filter — find stocks that built a base after a prior
+ * high and are now re-approaching that high. Catches W-bottoms, U-bottoms,
+ * cup-with-handle and flat-base patterns all at once.
+ *
+ *   lookback         — window to find the prior high
+ *   threshold        — how close (%) current price must be below the high
+ *   minBaseDays      — how many bars ago the high must be (rules out 1-2d
+ *                      pullbacks that haven't actually formed a base)
  */
-export interface VcpFilter {
+export interface BreakoutPendingFilter {
   enabled: boolean;
+  lookback: number;     // e.g. 60 days — window to find the resistance high
+  threshold: number;    // e.g. 5 (%) — within this much below the high
+  minBaseDays: number;  // e.g. 15 — high must be at least this many bars ago
 }
 
 export interface SpecialFilters {

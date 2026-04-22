@@ -228,6 +228,16 @@ def init_schema():
                 short_change   INTEGER DEFAULT 0,
                 PRIMARY KEY (symbol, date)
             );
+
+            -- TDCC 集保 weekly 股權分散 -- level 15 = 1,000,001股 以上 = 千張大戶
+            CREATE TABLE IF NOT EXISTS shareholding_weekly (
+                symbol           TEXT NOT NULL,
+                date             TEXT NOT NULL,   -- YYYYMMDD as published by TDCC
+                big_holder_count INTEGER DEFAULT 0,
+                big_holder_pct   REAL DEFAULT 0,
+                PRIMARY KEY (symbol, date)
+            );
+            CREATE INDEX IF NOT EXISTS idx_shareholding_symbol ON shareholding_weekly(symbol);
         """)
         conn.commit()
 

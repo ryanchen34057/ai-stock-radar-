@@ -224,6 +224,16 @@ export function StockGrid({
       }
     }
 
+    // TDCC 千張大戶 增加 — count_change_pct > 0 week-over-week.
+    // Stocks that have accumulated > 1M-share holders are getting "absorbed"
+    // by large investors / insiders, a classic bullish accumulation signal.
+    if (sf.bigHolderIncrease) {
+      result = result.filter((s) => {
+        const bh = s.big_holder;
+        return bh != null && bh.count_change_pct != null && bh.count_change_pct > 0;
+      });
+    }
+
     // Breakout-pending scan — stocks sitting in a base (W / U / cup / flat)
     // near their prior high, about to attempt a breakout.
     if (breakoutPendingFilter.enabled) {

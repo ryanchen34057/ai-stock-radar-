@@ -513,6 +513,11 @@ export function ControlBar() {
           activeClass="bg-tw-down/20 text-tw-down border-tw-down/50">
           回測20MA反彈
         </FilterPill>
+        <FilterPill active={specialFilters.bigHolderIncrease} onClick={() => toggleSF('bigHolderIncrease')}
+          activeClass="bg-tw-down/20 text-tw-down border-tw-down/50"
+          >
+          千張大戶增加 ↗
+        </FilterPill>
       </div>
 
       {/* ── Row 3b: price & PE range filters ── */}

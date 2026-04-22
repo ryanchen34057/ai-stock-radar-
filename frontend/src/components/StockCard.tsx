@@ -51,6 +51,45 @@ function fmtNet(n: number): string {
   return (n > 0 ? '+' : '-') + str;
 }
 
+/**
+ * 千張大戶 badge. Shows current count + % held. When we have two weeks of
+ * TDCC data, also shows a red ↗ (increase) or green ↘ (decrease) arrow with
+ * the WoW count change percentage.
+ */
+function BigHolderBadge({ bh }: { bh: NonNullable<StockData['big_holder']> }) {
+  const chg = bh.count_change_pct;
+  const hasChange = chg != null && Number.isFinite(chg);
+  const up   = hasChange && chg! > 0;
+  const down = hasChange && chg! < 0;
+  const cls = up
+    ? 'bg-tw-down/15 text-tw-down border border-tw-down/40'
+    : down
+      ? 'bg-tw-up/15 text-tw-up border border-tw-up/40'
+      : 'bg-white/5 text-text-s border border-white/15';
+  const arrow = up ? '↗' : down ? '↘' : '';
+  const date = bh.date ? `${bh.date.slice(4,6)}/${bh.date.slice(6,8)}` : '';
+  const tip = [
+    `1,000 張以上大戶  (${date})`,
+    `人數：${bh.count.toLocaleString()} 人  (${bh.pct.toFixed(2)}%)`,
+    bh.prev_count != null
+      ? `上週：${bh.prev_count.toLocaleString()} 人  →  本週${chg! >= 0 ? '增加' : '減少'} ${Math.abs(chg!).toFixed(2)}%`
+      : '（本週為首筆資料，下週起顯示變化%）',
+  ].join('\n');
+  return (
+    <span
+      className={`ml-auto text-[11px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap ${cls}`}
+      title={tip}
+    >
+      大戶 {bh.count.toLocaleString()}
+      {hasChange && (
+        <span className="ml-1 font-bold">
+          {arrow}{Math.abs(chg!).toFixed(1)}%
+        </span>
+      )}
+    </span>
+  );
+}
+
 // Taiwan-market conventional names for moving averages
 function maLineName(period: number): string {
   switch (period) {
@@ -350,9 +389,10 @@ export function StockCard({ stock, selectedMA, insti, breakout, onClick }: Props
         <span className="text-text-s">L{stock.layer}</span>
       </div>
 
-      {/* Volume row */}
-      <div className="flex items-center text-xs text-text-s mt-1">
+      {/* Volume row + 千張大戶 */}
+      <div className="flex items-center gap-2 text-xs text-text-s mt-1">
         <span className="font-mono">{formatVolume(stock.volume)}</span>
+        {stock.big_holder && <BigHolderBadge bh={stock.big_holder} />}
       </div>
 
       {/* Key financial metrics — 3×2 mini grid */}

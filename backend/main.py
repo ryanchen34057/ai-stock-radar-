@@ -21,6 +21,7 @@ from app.services.finmind_service import ensure_finmind_current
 from app.services.disposal_service import ensure_disposal_current, refresh_disposal_list
 from app.services.institutional_service import backfill_institutional_history
 from app.services import setup_progress
+from app.services.shareholding_service import refresh_shareholding_weekly
 from app.services import fb_service, kol_service, twse_mis_service
 
 logging.basicConfig(
@@ -79,6 +80,10 @@ async def lifespan(app: FastAPI):
             setup_progress.mark_phase_done("institutional")
         except Exception as e:
             logger.error(f"institutional backfill failed: {e}")
+        try:
+            refresh_shareholding_weekly()
+        except Exception as e:
+            logger.error(f"shareholding refresh failed: {e}")
         setup_progress.mark_all_done()
 
     threading.Thread(target=_startup_data_sweep, daemon=True).start()
@@ -132,6 +137,15 @@ async def lifespan(app: FastAPI):
         lambda: backfill_institutional_history(days=3),
         CronTrigger(hour=17, minute=30, timezone="Asia/Taipei"),
         id="daily_institutional",
+        replace_existing=True,
+    )
+
+    # TDCC 集保股權分散 — published every Friday evening (~18:30). Pull at
+    # 19:00 Friday so the weekly 千張大戶 change is fresh for Monday open.
+    scheduler.add_job(
+        lambda: refresh_shareholding_weekly(),
+        CronTrigger(day_of_week="fri", hour=19, minute=0, timezone="Asia/Taipei"),
+        id="weekly_shareholding",
         replace_existing=True,
     )
 

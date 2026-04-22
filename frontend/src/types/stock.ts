@@ -65,6 +65,17 @@ export interface StockData {
   } | null;
   data_complete?: boolean;
   kline_count?: number;
+  /** TDCC 集保週報 — 千張大戶（level 15, 1,000,001 股以上）*/
+  big_holder?: {
+    date: string;                   // YYYYMMDD latest snapshot
+    count: number;                  // 人數 (latest week)
+    pct: number;                    // 佔集保庫存數比例% (latest week)
+    prev_date: string | null;
+    prev_count: number | null;
+    prev_pct: number | null;
+    count_change_pct: number | null; // (latest - prev) / prev × 100, signed
+    pct_change: number | null;       // absolute percentage-point change
+  } | null;
 }
 
 export type ThemeFilter = 'A' | 'B' | 'C' | 'all' | 'cross';
@@ -130,6 +141,7 @@ export interface SpecialFilters {
   pullbackReclaim5:  boolean;  // last 5d pulled back to / below MA5,  today close > MA5
   pullbackReclaim10: boolean;  // last 5d pulled back to / below MA10, today close > MA10
   pullbackReclaim20: boolean;  // last 5d pulled back to / below MA20, today close > MA20
+  bigHolderIncrease: boolean;  // TDCC 千張大戶 count_change_pct > 0 week-over-week
 }
 
 export interface RangeFilter {

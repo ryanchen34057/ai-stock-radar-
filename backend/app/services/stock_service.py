@@ -200,6 +200,14 @@ def get_dashboard_data() -> dict:
         logger.warning(f"live quotes unavailable: {e}")
         live_quotes = {}
 
+    # TDCC 千張大戶 latest week + WoW change per tracked symbol
+    try:
+        from app.services.shareholding_service import get_latest_per_symbol
+        big_holder_map = get_latest_per_symbol()
+    except Exception as e:
+        logger.warning(f"shareholding unavailable: {e}")
+        big_holder_map = {}
+
     conn = get_connection()
     try:
         stocks_rows = conn.execute(
@@ -343,6 +351,7 @@ def get_dashboard_data() -> dict:
                 "eps_annual": eps_annual_map.get(symbol, []),
                 "eps_quarterly": eps_quarterly_map.get(symbol, []),
                 "disposal": disposal_map.get(symbol),  # null if not currently disposed
+                "big_holder": big_holder_map.get(symbol),  # TDCC 千張大戶 latest + WoW change
                 "data_complete": data_complete,
                 "kline_count": len(klines_all),
             })

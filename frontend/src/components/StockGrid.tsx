@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, NearHighFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, VcpFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance, calculateMAFull } from '../utils/calcMA';
+import { analyzeVCP, type VcpAnalysis } from '../utils/vcp';
 import { getDisplayPe } from '../utils/formatPe';
 import { calculateKD, getKDTrend } from '../utils/calcKD';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -13,7 +14,7 @@ interface Props {
   selectedMA: MAPeriod;
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
-  nearHighFilter: NearHighFilter;
+  vcpFilter: VcpFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -27,7 +28,7 @@ interface Props {
 }
 
 export function StockGrid({
-  stocks, selectedMA, alertFilter, maProximityFilter, nearHighFilter,
+  stocks, selectedMA, alertFilter, maProximityFilter, vcpFilter,
   specialFilters, instiFilters, priceFilter, peFilter, kdFilters,
   themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
@@ -78,22 +79,6 @@ export function StockGrid({
         const ma = s.ma[String(selectedMA) as keyof typeof s.ma] ?? null;
         const sig = getSignal(s.current_price, ma);
         return alertFilter === 'below' ? sig === 'below' : sig === 'above';
-      });
-    }
-
-    // "Approaching recent high" — latest price is within N% BELOW the highest
-    // 'high' price of the last D bars. Matches stocks setting up to break
-    // previous resistance.
-    if (nearHighFilter.enabled) {
-      result = result.filter((s) => {
-        const price = s.current_price;
-        if (price === null || s.klines.length === 0) return false;
-        const window = s.klines.slice(-Math.min(nearHighFilter.days, s.klines.length));
-        const high = Math.max(...window.map((k) => k.high));
-        if (high <= 0) return false;
-        const gapPct = ((high - price) / high) * 100;
-        // Keep only stocks at-or-just-below the window high (positive gap, within threshold)
-        return gapPct >= 0 && gapPct <= nearHighFilter.threshold;
       });
     }
 
@@ -239,6 +224,13 @@ export function StockGrid({
       }
     }
 
+    // VCP candidate scan — Minervini pattern (trend template + contracting
+    // base + volume dry-up). Computed last so it runs on the already-filtered
+    // universe and skips the O(N·klines) work when off.
+    if (vcpFilter.enabled) {
+      result = result.filter((s) => analyzeVCP(s) !== null);
+    }
+
     // Sort
     return [...result].sort((a, b) => {
       switch (sortBy) {
@@ -259,7 +251,19 @@ export function StockGrid({
           return 0;
       }
     });
-  }, [stocks, selectedMA, alertFilter, maProximityFilter, nearHighFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
+  }, [stocks, selectedMA, alertFilter, maProximityFilter, vcpFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
+
+  // Pre-compute VCP analyses for the cards that need them so we don't
+  // re-run the pivot/contraction logic twice per render.
+  const vcpBySymbol = useMemo<Map<string, VcpAnalysis>>(() => {
+    const m = new Map<string, VcpAnalysis>();
+    if (!vcpFilter.enabled) return m;
+    for (const s of filtered) {
+      const a = analyzeVCP(s);
+      if (a) m.set(s.symbol, a);
+    }
+    return m;
+  }, [filtered, vcpFilter.enabled]);
 
   // ── Group by layer → sub_category ──────────────────────────────────────
   // Tier 1 (龍頭) sorts first within each sub-group so it appears leftmost.
@@ -355,6 +359,7 @@ export function StockGrid({
                   stock={stock}
                   selectedMA={selectedMA}
                   insti={insti?.stocks[stock.symbol] ?? null}
+                  vcp={vcpBySymbol.get(stock.symbol)}
                   onClick={() => setSelectedStock(stock)}
                 />
               ))}

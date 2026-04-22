@@ -102,14 +102,12 @@ export interface MAProximityFilter {
 }
 
 /**
- * "Approaching recent high" filter — find stocks whose latest close is
- * within `threshold` % BELOW the highest `high` of the last `days` bars.
- * Use case: spot stocks about to break previous high.
+ * VCP (Volatility Contraction Pattern) filter — Minervini-style setup scan.
+ * On: show only stocks that pass Trend Template + have >= 2 contracting
+ * pullbacks with the last contraction < 10% + volume dry-up.
  */
-export interface NearHighFilter {
+export interface VcpFilter {
   enabled: boolean;
-  days: number;      // lookback window (20, 60, 120, 240 typically)
-  threshold: number; // percentage below the high, e.g. 3 = within 3% below
 }
 
 export interface SpecialFilters {

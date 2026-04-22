@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { StockData, MAPeriod } from '../types/stock';
 import type { InstitutionalStock } from '../hooks/useInstitutional';
+import type { VcpAnalysis } from '../utils/vcp';
 import { useMASignal } from '../hooks/useMASignal';
 import { MiniKlineChart } from './MiniKlineChart';
 import { formatPrice, formatChange, formatChangePct, formatVolume } from '../utils/formatters';
@@ -12,6 +13,7 @@ interface Props {
   stock: StockData;
   selectedMA: MAPeriod;
   insti: InstitutionalStock | null;
+  vcp?: VcpAnalysis;                // present when VCP filter is on and stock qualifies
   onClick: () => void;
 }
 
@@ -120,7 +122,7 @@ function InstiRow({ insti }: { insti: InstitutionalStock }) {
   );
 }
 
-export function StockCard({ stock, selectedMA, insti, onClick }: Props) {
+export function StockCard({ stock, selectedMA, insti, vcp, onClick }: Props) {
   const { signal, badgeType, badgePeriod, maValue, distance } = useMASignal(stock, selectedMA);
   const isUp = (stock.change ?? 0) >= 0;
   const hasData = stock.current_price !== null;
@@ -146,11 +148,17 @@ export function StockCard({ stock, selectedMA, insti, onClick }: Props) {
     setTimeout(() => setRefetching(false), 30_000);
   };
 
+  // VCP "prime setup" — close to pivot AND volume dry-up → animated green glow
+  const vcpPrime = vcp?.isPrime ?? false;
+  const vcpBorderCls = vcpPrime
+    ? 'border-tw-up border-2 animate-pulse shadow-[0_0_18px_rgba(0,200,100,0.5)]'
+    : `border border-border-c border-l-4 ${SIGNAL_BORDER[signal]}`;
+
   return (
     <div
       onClick={onClick}
       className={`
-        relative bg-card-bg border border-border-c border-l-4 ${SIGNAL_BORDER[signal]}
+        relative bg-card-bg ${vcpBorderCls}
         rounded-lg p-3 cursor-pointer
         hover:bg-card-hover transition-colors duration-150
         select-none
@@ -181,6 +189,51 @@ export function StockCard({ stock, selectedMA, insti, onClick }: Props) {
           </span>
         )}
       </div>
+
+      {/* VCP info row — only when the candidate passes the scan */}
+      {vcp && (
+        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap relative z-30">
+          <span
+            className={`text-[11px] px-1.5 py-0.5 rounded font-bold border font-mono
+              ${vcpPrime
+                ? 'bg-tw-up/30 text-tw-up border-tw-up'
+                : 'bg-purple-500/20 text-purple-300 border-purple-500/50'}`}
+            title={`${vcp.contractionCount} 次波動收縮`}
+          >
+            VCP · {vcp.contractionCount}T
+          </span>
+          <span
+            className="text-[11px] px-1.5 py-0.5 rounded font-mono bg-white/10 text-text-p border border-white/20"
+            title="最後一次收縮幅度（須 < 10% 才成立）"
+          >
+            末縮 {(vcp.lastContraction * 100).toFixed(1)}%
+          </span>
+          <span
+            className={`text-[11px] px-1.5 py-0.5 rounded font-mono border
+              ${vcp.distanceToPivotPct < 5
+                ? 'bg-tw-up/20 text-tw-up border-tw-up/50'
+                : 'bg-white/10 text-text-p border-white/20'}`}
+            title={`Pivot Point ${formatPrice(vcp.pivotPoint)}`}
+          >
+            距 Pivot {vcp.distanceToPivotPct >= 0
+              ? `${vcp.distanceToPivotPct.toFixed(1)}%`
+              : `+${Math.abs(vcp.distanceToPivotPct).toFixed(1)}%`}
+          </span>
+          {vcp.volumeDryUp && (
+            <span
+              className="text-[11px] px-1.5 py-0.5 rounded font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/50"
+              title="近 10 日均量 < 近 50 日均量 × 0.8（量能乾涸）"
+            >
+              VDU 🌵
+            </span>
+          )}
+          {vcpPrime && (
+            <span className="text-[11px] px-1.5 py-0.5 rounded font-bold bg-tw-up text-black border border-tw-up">
+              ⚡ 最佳進場
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Row B: taxonomy + flags + MA signal — wraps if needed */}
       <div className="flex items-center gap-1 mb-1.5 flex-wrap">

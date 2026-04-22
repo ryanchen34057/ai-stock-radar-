@@ -126,10 +126,13 @@ export function StockCard({ stock, selectedMA, insti, onClick }: Props) {
   const hasData = stock.current_price !== null;
 
   // K-line completeness overlay state.
-  // Show overlay if backend marks data_complete=false OR (fallback when backend
-  // hasn't yet sent the flag) kline count is obviously sparse (<100 bars).
+  // Primary signal: backend's data_complete flag (set by real-earliest-date check).
+  // Fallback (for outdated backends): <= 10 rows is a clear "only daily update ran"
+  // signature. Row count alone is NOT generally reliable -- newly-IPO'd stocks can
+  // legitimately have few rows -- so we only use it as a last resort.
   const klineCount = stock.kline_count ?? stock.klines.length;
-  const incomplete = stock.data_complete === false || (stock.data_complete === undefined && klineCount < 100);
+  const incomplete = stock.data_complete === false
+    || (stock.data_complete === undefined && klineCount <= 10);
   const [refetching, setRefetching] = useState(false);
   const handleRefetch = async (e: React.MouseEvent) => {
     e.stopPropagation();   // don't open modal

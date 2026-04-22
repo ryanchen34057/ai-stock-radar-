@@ -111,7 +111,9 @@ function RefetchAllButton() {
 
   const incomplete = stocks.filter((s) => {
     const n = s.kline_count ?? s.klines.length;
-    return s.data_complete === false || (s.data_complete === undefined && n < 100);
+    // Trust backend's data_complete when present; fallback to very-sparse
+    // heuristic only when the field is missing (outdated backend).
+    return s.data_complete === false || (s.data_complete === undefined && n <= 10);
   });
 
   if (incomplete.length === 0) return null;

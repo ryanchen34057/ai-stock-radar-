@@ -281,12 +281,25 @@ def get_dashboard_data() -> dict:
             themes_raw = stock["themes"] if stock["themes"] else None
             sec_raw = stock["secondary_layers"] if "secondary_layers" in stock.keys() and stock["secondary_layers"] else None
 
-            # Data completeness: true if we have ≥500 klines (about 2y), OR
-            # earliest kline is already back near 5 years ago (i.e. stock IPO'd
-            # recently so we already have everything yfinance offers).
-            cutoff_5y = (datetime.now() - timedelta(days=5 * 365 - 60)).strftime("%Y-%m-%d")
+            # Data completeness: we distinguish "full historical fetch done"
+            # from "only the 5-day daily update touched this stock" by the
+            # AGE of the earliest kline — not by row count. A recently-IPO'd
+            # stock legitimately has few rows but earliest is still months old
+            # (after a 5y fetch), whereas a stock we've never done a 5y fetch
+            # for only has 5-7 rows all within the last week.
             earliest = klines_all[0]["date"] if klines_all else None
-            data_complete = (len(klines_all) >= 500) or (earliest is not None and earliest <= cutoff_5y)
+            data_complete = False
+            if earliest:
+                try:
+                    earliest_dt = datetime.strptime(earliest, "%Y-%m-%d")
+                    # ≥ 30 days of history implies a real historical fetch ran at
+                    # some point (daily 5d update alone can only create ≤ 5 rows
+                    # spanning < 7 days). Newly-IPO'd stocks < 30 days old are
+                    # flagged incomplete — rare edge case, user can ignore.
+                    if (datetime.now() - earliest_dt).days >= 30:
+                        data_complete = True
+                except Exception:
+                    pass
 
             result.append({
                 "symbol": symbol,
@@ -345,12 +358,17 @@ def get_dashboard_data() -> dict:
 
 def fetch_missing_klines(period: str = "5y", min_rows: int = 1):
     """
-    Fetch 5y klines for stocks with incomplete data.
-    - min_rows=1 (default): only stocks with NO klines (used at startup for new stocks)
-    - min_rows=1000: re-fetch stocks with less than ~4 years of data
+    Fetch 5y klines for stocks whose historical data looks incomplete.
 
-    Newly-listed stocks (IPO < 5y ago) are detected by earliest kline date and skipped
-    — we assume yfinance has already given us everything available.
+    Completeness is determined by the AGE of the earliest kline, not the row
+    count: a stock is considered complete once we have at least ~30 days of
+    history (real 5y fetch always spans > 30 days; the daily 5d update alone
+    only spans < 7 days). This correctly skips newly-IPO'd stocks that have
+    few rows but were already fully fetched.
+
+    The legacy `min_rows` parameter is still respected: if set > 1, stocks
+    with fewer rows than that are considered incomplete even if they have
+    >= 30 days of history (useful for forced backfill).
     """
     from datetime import datetime as _dt, timedelta as _td
     stocks = load_stocks_json()
@@ -364,21 +382,37 @@ def fetch_missing_klines(period: str = "5y", min_rows: int = 1):
     finally:
         conn.close()
 
-    # If first kline is within 60 days of "5y ago", we already have max available
-    cutoff = (_dt.now() - _td(days=5 * 365 - 60)).strftime("%Y-%m-%d")
-
     targets = []
+    now = _dt.now()
     for s in stocks:
         sym = s["symbol"]
         n = counts.get(sym, 0)
-        if n >= min_rows:
-            continue
         first = earliest.get(sym)
-        if first and first <= cutoff:
-            # Has data going back ~5y already — probably max available, skip
-            logger.debug(f"  skip {sym}: {n} rows but earliest={first} (likely max)")
+
+        # No data at all -> always incomplete
+        if n == 0 or not first:
+            targets.append(s)
             continue
-        targets.append(s)
+
+        # Compute age of earliest kline
+        try:
+            first_dt = _dt.strptime(first, "%Y-%m-%d")
+            days_old = (now - first_dt).days
+        except Exception:
+            days_old = 0
+
+        # Standard signal: < 30 days of history -> only daily update has touched this stock
+        if days_old < 30:
+            targets.append(s)
+            continue
+
+        # Backwards-compat: allow caller to force-refetch stocks under min_rows
+        # (use only for explicit /api/fetch-missing?min_rows=N backfill)
+        if min_rows > 1 and n < min_rows:
+            # Skip if earliest is already > 4.5y ago (can't get more from yfinance)
+            if days_old < 5 * 365 - 60:
+                targets.append(s)
+            continue
     if not targets:
         logger.info(f"fetch_missing_klines(min_rows={min_rows}): all stocks OK")
         return {"targets": 0, "success": 0, "failed": []}

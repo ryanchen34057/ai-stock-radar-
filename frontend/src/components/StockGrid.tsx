@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, NearHighFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance, calculateMAFull } from '../utils/calcMA';
@@ -13,6 +13,7 @@ interface Props {
   selectedMA: MAPeriod;
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
+  nearHighFilter: NearHighFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -26,7 +27,7 @@ interface Props {
 }
 
 export function StockGrid({
-  stocks, selectedMA, alertFilter, maProximityFilter,
+  stocks, selectedMA, alertFilter, maProximityFilter, nearHighFilter,
   specialFilters, instiFilters, priceFilter, peFilter, kdFilters,
   themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
@@ -77,6 +78,22 @@ export function StockGrid({
         const ma = s.ma[String(selectedMA) as keyof typeof s.ma] ?? null;
         const sig = getSignal(s.current_price, ma);
         return alertFilter === 'below' ? sig === 'below' : sig === 'above';
+      });
+    }
+
+    // "Approaching recent high" — latest price is within N% BELOW the highest
+    // 'high' price of the last D bars. Matches stocks setting up to break
+    // previous resistance.
+    if (nearHighFilter.enabled) {
+      result = result.filter((s) => {
+        const price = s.current_price;
+        if (price === null || s.klines.length === 0) return false;
+        const window = s.klines.slice(-Math.min(nearHighFilter.days, s.klines.length));
+        const high = Math.max(...window.map((k) => k.high));
+        if (high <= 0) return false;
+        const gapPct = ((high - price) / high) * 100;
+        // Keep only stocks at-or-just-below the window high (positive gap, within threshold)
+        return gapPct >= 0 && gapPct <= nearHighFilter.threshold;
       });
     }
 
@@ -242,7 +259,7 @@ export function StockGrid({
           return 0;
       }
     });
-  }, [stocks, selectedMA, alertFilter, maProximityFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
+  }, [stocks, selectedMA, alertFilter, maProximityFilter, nearHighFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
 
   // ── Group by layer → sub_category ──────────────────────────────────────
   // Tier 1 (龍頭) sorts first within each sub-group so it appears leftmost.

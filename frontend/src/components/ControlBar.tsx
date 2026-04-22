@@ -86,6 +86,7 @@ export function ControlBar() {
     selectedMA, setSelectedMA,
     alertFilter, setAlertFilter,
     maProximityFilter, setMAProximityFilter,
+    nearHighFilter, setNearHighFilter,
     specialFilters, setSpecialFilters,
     instiFilters, setInstiFilters,
     priceFilter, setPriceFilter,
@@ -409,6 +410,50 @@ export function ControlBar() {
             {maProximityFilter.direction === 'above' ? '上方' :
              maProximityFilter.direction === 'below' ? '下方' : '±'}
             {maProximityFilter.threshold}%
+          </span>
+        )}
+      </div>
+
+      {/* ── Row 2b: 快過前高 filter (near recent high) ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={nearHighFilter.enabled}
+            onChange={(e) => setNearHighFilter({ ...nearHighFilter, enabled: e.target.checked })}
+            className="accent-accent w-3.5 h-3.5"
+          />
+          <span className="text-sm font-semibold text-white">快過前高</span>
+        </label>
+        <span className="text-xs text-text-t">最近</span>
+        <select
+          value={nearHighFilter.days}
+          disabled={!nearHighFilter.enabled}
+          onChange={(e) => setNearHighFilter({ ...nearHighFilter, days: Number(e.target.value) })}
+          className="text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                     focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {[5, 10, 20, 60, 120, 240].map((d) => (
+            <option key={d} value={d}>{d} 日</option>
+          ))}
+        </select>
+        <span className="text-xs text-text-t">高點的</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number" min={0.1} max={20} step={0.5}
+            value={nearHighFilter.threshold}
+            disabled={!nearHighFilter.enabled}
+            onChange={(e) => setNearHighFilter({
+              ...nearHighFilter, threshold: Math.max(0.1, parseFloat(e.target.value) || 1),
+            })}
+            className="w-14 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                       text-center focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          <span className="text-xs text-text-t">% 以內</span>
+        </div>
+        {nearHighFilter.enabled && (
+          <span className="text-xs text-accent font-mono">
+            ▸ 距 {nearHighFilter.days}日高點 ≤ {nearHighFilter.threshold}%
           </span>
         )}
       </div>

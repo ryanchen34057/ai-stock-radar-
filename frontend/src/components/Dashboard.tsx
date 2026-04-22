@@ -9,7 +9,7 @@ import { StockGrid } from './StockGrid';
 export function Dashboard() {
   const {
     stocks, loading, error,
-    selectedMA, alertFilter, maProximityFilter, specialFilters, instiFilters,
+    selectedMA, alertFilter, maProximityFilter, nearHighFilter, specialFilters, instiFilters,
     priceFilter, peFilter, kdFilters,
     themeFilter, tierFilter, searchQuery,
     selectedLayers, sortBy,
@@ -64,6 +64,7 @@ export function Dashboard() {
               selectedMA={selectedMA}
               alertFilter={alertFilter}
               maProximityFilter={maProximityFilter}
+              nearHighFilter={nearHighFilter}
               specialFilters={specialFilters}
               instiFilters={instiFilters}
               priceFilter={priceFilter}

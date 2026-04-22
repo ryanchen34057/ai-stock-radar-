@@ -101,6 +101,17 @@ export interface MAProximityFilter {
   threshold: number; // percentage, e.g. 3 means within 3%
 }
 
+/**
+ * "Approaching recent high" filter — find stocks whose latest close is
+ * within `threshold` % BELOW the highest `high` of the last `days` bars.
+ * Use case: spot stocks about to break previous high.
+ */
+export interface NearHighFilter {
+  enabled: boolean;
+  days: number;      // lookback window (20, 60, 120, 240 typically)
+  threshold: number; // percentage below the high, e.g. 3 = within 3% below
+}
+
 export interface SpecialFilters {
   maBullishAlignment: boolean; // MA5 > MA10 > MA20 > MA60
   price20DayHigh: boolean;     // today close = 20-day high

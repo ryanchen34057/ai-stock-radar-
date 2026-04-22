@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, NearHighFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 
 interface DashboardState {
   // Data
@@ -13,6 +13,7 @@ interface DashboardState {
   selectedMA: MAPeriod;
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
+  nearHighFilter: NearHighFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -33,6 +34,7 @@ interface DashboardState {
   setSelectedMA: (ma: MAPeriod) => void;
   setAlertFilter: (filter: AlertFilter) => void;
   setMAProximityFilter: (f: MAProximityFilter) => void;
+  setNearHighFilter: (f: NearHighFilter) => void;
   setSpecialFilters: (f: SpecialFilters) => void;
   setInstiFilters: (f: InstiFilters) => void;
   setPriceFilter: (f: RangeFilter) => void;
@@ -88,6 +90,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectedMA: 60,
   alertFilter: 'all',
   maProximityFilter: { enabled: false, ma: 20, direction: 'above', threshold: 3 },
+  nearHighFilter: { enabled: false, days: 20, threshold: 3 },
   specialFilters: DEFAULT_SPECIAL,
   instiFilters: DEFAULT_INSTI,
   priceFilter: { enabled: false, min: null, max: null },
@@ -108,6 +111,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setSelectedMA: (selectedMA) => set({ selectedMA }),
   setAlertFilter: (alertFilter) => set({ alertFilter }),
   setMAProximityFilter: (maProximityFilter) => set({ maProximityFilter }),
+  setNearHighFilter: (nearHighFilter) => set({ nearHighFilter }),
   setSpecialFilters: (specialFilters) => set({ specialFilters }),
   setInstiFilters: (instiFilters) => set({ instiFilters }),
   setPriceFilter: (priceFilter) => set({ priceFilter }),

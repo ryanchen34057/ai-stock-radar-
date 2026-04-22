@@ -38,7 +38,7 @@ if not exist "%~dp0frontend\dist\index.html" (
     cd ..
 )
 
-:: Pick a Python runner — same fallback order as setup.bat
+:: Pick a Python runner -- same fallback order as setup.bat
 set "PY_CMD="
 py -3.12 --version 1>nul 2>&1
 if not errorlevel 1 set "PY_CMD=py -3.12"
@@ -56,7 +56,7 @@ if not defined PY_CMD (
     exit /b 1
 )
 
-:: Start backend in a new window — backend serves both API and the built
+:: Start backend in a new window -- backend serves both API and the built
 :: React app, so we don't need a separate frontend server.
 echo [1/2] Starting backend (serves API + frontend on port 8000)...
 start "AI Stock Radar - Backend" cmd /k "cd /d %~dp0backend && %PY_CMD% -m uvicorn main:app --host 127.0.0.1 --port 8000"

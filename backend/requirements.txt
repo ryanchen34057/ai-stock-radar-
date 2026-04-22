@@ -11,4 +11,5 @@ google-genai>=0.3.0
 google-api-python-client>=2.120.0
 beautifulsoup4>=4.12.0
 playwright>=1.42.0
+notebooklm-py>=0.3.0
 

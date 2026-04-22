@@ -362,6 +362,57 @@ def fetch_missing(period: str = "5y", min_rows: int = Query(default=1, ge=1)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Per-stock refetch background state — lets UI show "抓取中" spinner while
+# a single stock is being refreshed
+_refetching_symbols: set[str] = set()
+_refetch_lock = threading.Lock()
+
+
+def _refetch_one_bg(symbol: str, period: str = "5y"):
+    from app.services.stock_service import fetch_yfinance, upsert_klines, upsert_metadata
+    try:
+        df, info = fetch_yfinance(symbol, period)
+        if df is not None and not df.empty:
+            upsert_klines(symbol, df)
+            if info:
+                upsert_metadata(symbol, info)
+            logger.info(f"refetch {symbol}: {len(df)} rows")
+        else:
+            logger.warning(f"refetch {symbol}: no data")
+    except Exception as e:
+        logger.error(f"refetch {symbol}: {e}")
+    finally:
+        with _refetch_lock:
+            _refetching_symbols.discard(symbol)
+
+
+@router.post("/stocks/{symbol}/refetch")
+def refetch_stock(symbol: str, period: str = "5y"):
+    """Fire-and-forget 5y refetch for a single stock. Returns immediately."""
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT symbol FROM stocks WHERE symbol = ?", (symbol,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Stock {symbol} not found")
+    finally:
+        conn.close()
+
+    with _refetch_lock:
+        if symbol in _refetching_symbols:
+            return {"status": "already_running", "symbol": symbol}
+        _refetching_symbols.add(symbol)
+
+    threading.Thread(target=_refetch_one_bg, args=(symbol, period), daemon=True).start()
+    return {"status": "started", "symbol": symbol}
+
+
+@router.get("/stocks/refetching")
+def get_refetching():
+    """List of symbols currently being refetched (for UI spinner sync)."""
+    with _refetch_lock:
+        return {"symbols": sorted(_refetching_symbols)}
+
+
 @router.get("/institutional")
 def get_institutional(date: str | None = Query(default=None, description="YYYYMMDD, default=last weekday")):
     """

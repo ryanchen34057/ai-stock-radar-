@@ -63,6 +63,8 @@ export interface StockData {
     end_date: string;
     source: string;
   } | null;
+  data_complete?: boolean;
+  kline_count?: number;
 }
 
 export type ThemeFilter = 'A' | 'B' | 'C' | 'all' | 'cross';

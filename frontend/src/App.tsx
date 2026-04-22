@@ -55,7 +55,8 @@ export default function App() {
       <nav className="flex items-center gap-0 border-b border-border-c bg-card-bg px-4 flex-shrink-0">
         <TabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')}>📊 儀表板</TabButton>
         <TabButton active={tab === 'settings'}  onClick={() => setTab('settings')}>⚙ 設定</TabButton>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex items-center gap-1.5">
+          <RefetchAllButton />
           <PanelToggles />
           <span className="text-xs text-text-t pl-2 pr-1 hidden sm:inline">
             AI 產業鏈股票雷達
@@ -100,6 +101,52 @@ export default function App() {
       <SetupOverlay />
       <OnboardingGuide />
     </div>
+  );
+}
+
+/** Top-right batch refetch button — appears only when some stocks are incomplete. */
+function RefetchAllButton() {
+  const stocks = useDashboardStore((s) => s.stocks);
+  const [running, setRunning] = useState(false);
+
+  const incomplete = stocks.filter((s) => {
+    const n = s.kline_count ?? s.klines.length;
+    return s.data_complete === false || (s.data_complete === undefined && n < 100);
+  });
+
+  if (incomplete.length === 0) return null;
+
+  const doRefetchAll = async () => {
+    if (running) return;
+    setRunning(true);
+    for (const s of incomplete) {
+      fetch(`/api/stocks/${s.symbol}/refetch`, { method: 'POST' }).catch(() => {});
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    // Keep the button in "running" state for a while so user sees feedback
+    setTimeout(() => setRunning(false), 60_000);
+  };
+
+  return (
+    <button
+      onClick={doRefetchAll}
+      disabled={running}
+      className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg border transition-colors
+        ${running
+          ? 'bg-accent/10 text-accent border-accent/40 cursor-wait'
+          : 'bg-yellow-500/15 text-yellow-300 border-yellow-500/50 hover:bg-yellow-500/25'
+        }`}
+      title={incomplete.map((s) => `${s.symbol} ${s.name} (${s.kline_count ?? s.klines.length} 筆)`).join('\n')}
+    >
+      {running ? (
+        <>
+          <span className="inline-block w-3.5 h-3.5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          抓取中...
+        </>
+      ) : (
+        <>⚠ 一鍵重抓 {incomplete.length} 檔</>
+      )}
+    </button>
   );
 }
 

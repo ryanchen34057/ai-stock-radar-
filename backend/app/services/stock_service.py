@@ -7,7 +7,7 @@ import math
 import time
 import random
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from app.database import get_connection, DB_PATH
 
 
@@ -280,6 +280,14 @@ def get_dashboard_data() -> dict:
 
             themes_raw = stock["themes"] if stock["themes"] else None
             sec_raw = stock["secondary_layers"] if "secondary_layers" in stock.keys() and stock["secondary_layers"] else None
+
+            # Data completeness: true if we have ≥500 klines (about 2y), OR
+            # earliest kline is already back near 5 years ago (i.e. stock IPO'd
+            # recently so we already have everything yfinance offers).
+            cutoff_5y = (datetime.now() - timedelta(days=5 * 365 - 60)).strftime("%Y-%m-%d")
+            earliest = klines_all[0]["date"] if klines_all else None
+            data_complete = (len(klines_all) >= 500) or (earliest is not None and earliest <= cutoff_5y)
+
             result.append({
                 "symbol": symbol,
                 "name": stock["name"],
@@ -319,6 +327,8 @@ def get_dashboard_data() -> dict:
                 "eps_annual": eps_annual_map.get(symbol, []),
                 "eps_quarterly": eps_quarterly_map.get(symbol, []),
                 "disposal": disposal_map.get(symbol),  # null if not currently disposed
+                "data_complete": data_complete,
+                "kline_count": len(klines_all),
             })
 
         # Last updated time

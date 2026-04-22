@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { StockData, MAPeriod } from '../types/stock';
 import type { InstitutionalStock } from '../hooks/useInstitutional';
 import { useMASignal } from '../hooks/useMASignal';
@@ -124,6 +125,24 @@ export function StockCard({ stock, selectedMA, insti, onClick }: Props) {
   const isUp = (stock.change ?? 0) >= 0;
   const hasData = stock.current_price !== null;
 
+  // K-line completeness overlay state.
+  // Show overlay if backend marks data_complete=false OR (fallback when backend
+  // hasn't yet sent the flag) kline count is obviously sparse (<100 bars).
+  const klineCount = stock.kline_count ?? stock.klines.length;
+  const incomplete = stock.data_complete === false || (stock.data_complete === undefined && klineCount < 100);
+  const [refetching, setRefetching] = useState(false);
+  const handleRefetch = async (e: React.MouseEvent) => {
+    e.stopPropagation();   // don't open modal
+    e.preventDefault();
+    if (refetching) return;
+    setRefetching(true);
+    try {
+      await fetch(`/api/stocks/${stock.symbol}/refetch`, { method: 'POST' });
+    } catch {/* ignore */}
+    // Spinner shows until next dashboard refresh brings updated data
+    setTimeout(() => setRefetching(false), 30_000);
+  };
+
   return (
     <div
       onClick={onClick}
@@ -134,9 +153,10 @@ export function StockCard({ stock, selectedMA, insti, onClick }: Props) {
         select-none
       `}
     >
-      {/* Header: two rows so the name never gets squeezed by badges */}
+      {/* Header: two rows so the name never gets squeezed by badges.
+          relative+z-30 so it stays visible above the "incomplete" overlay. */}
       {/* Row A: logo + symbol + name (name takes all remaining width) */}
-      <div className="flex items-center gap-2 mb-1 min-w-0">
+      <div className="flex items-center gap-2 mb-1 min-w-0 relative z-30">
         {stock.logo_id ? (
           <img
             src={`https://s3-symbol-logo.tradingview.com/${stock.logo_id}--big.svg`}
@@ -238,7 +258,7 @@ export function StockCard({ stock, selectedMA, insti, onClick }: Props) {
       </div>
 
       {/* Mini chart */}
-      <div className="mb-2">
+      <div className="mb-2 relative">
         {stock.klines.length > 0 ? (
           <MiniKlineChart
             klines={stock.klines}
@@ -336,6 +356,42 @@ export function StockCard({ stock, selectedMA, insti, onClick }: Props) {
 
       {/* Institutional row */}
       {insti && <InstiRow insti={insti} />}
+
+      {/* Incomplete data overlay — starts below the header so symbol & name
+          stay visible, making it easy to see which stocks are incomplete. */}
+      {incomplete && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute left-0 right-0 bottom-0 top-[58px] bg-dash-bg/92 backdrop-blur-sm rounded-b-lg
+                     flex flex-col items-center justify-center gap-3 z-20 cursor-default px-3"
+        >
+          {refetching ? (
+            <>
+              <span className="inline-block w-10 h-10 border-4 border-accent border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-bold text-accent">抓取中...</span>
+              <span className="text-xs text-text-s">約需 10-30 秒，請稍候</span>
+            </>
+          ) : (
+            <>
+              <div className="text-3xl">⚠️</div>
+              <div className="text-sm font-bold text-yellow-400 text-center">
+                K 線資料不完整
+                <div className="text-xs text-text-s font-normal mt-1">
+                  僅 {klineCount} 筆（正常應 ≥ 500）
+                </div>
+              </div>
+              <button
+                onClick={handleRefetch}
+                className="px-4 py-2 text-sm font-bold rounded-lg
+                           bg-accent hover:bg-accent/80 text-black
+                           transition-colors shadow-lg"
+              >
+                ↻ 重新抓取 5 年歷史
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

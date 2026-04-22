@@ -288,6 +288,7 @@ export function ControlBar() {
           <kbd className="ml-1 text-xs text-text-t">[R]</kbd>
         </button>
 
+
         <div className="flex items-center gap-1">
           <span className="text-sm font-semibold text-white mr-1">均線:</span>
           {MA_OPTIONS.map((ma) => (

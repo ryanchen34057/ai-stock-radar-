@@ -155,10 +155,10 @@ export function analyzeBBExpansion(
 ): BBExpansionResult | null {
   const period = opts.period ?? 20;
   const stdev = opts.stdev ?? 2;
-  const crossWindow = opts.crossWindowDays ?? 5;
+  const crossWindow = opts.crossWindowDays ?? 10;     // catch breakouts up to 2 weeks old
   const preRange = opts.squeezePreRange ?? 20;
-  const squeezeTol = opts.squeezeTolerance ?? 1.2;
-  const expRatio = opts.expansionRatio ?? 1.2;
+  const squeezeTol = opts.squeezeTolerance ?? 1.5;    // cross-day BBW within 50% of pre-min
+  const expRatio = opts.expansionRatio ?? 1.15;        // only need 15% expansion to trigger
 
   const bbw = calculateBBW(closes, period, stdev);
   const { upper } = calculateBollingerBands(closes, period, stdev);

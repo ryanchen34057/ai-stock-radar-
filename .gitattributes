@@ -1,0 +1,10 @@
+# Windows batch files MUST keep CRLF line endings, otherwise CMD on zh-TW
+# systems with CP950 codepage miscounts bytes mid-line and rejects commands.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+
+# Shell scripts use LF on all platforms
+*.sh            text eol=lf
+
+# Everything else — leave to git's autodetection
+* text=auto

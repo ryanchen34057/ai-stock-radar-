@@ -110,7 +110,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Import sanity check — catches numpy/pandas ABI mismatches or half-installed
+:: Import sanity check - catches numpy/pandas ABI mismatches or half-installed
 :: envs that `pip install` silently leaves behind. If any critical module
 :: fails to import, force-reinstall the common ABI-sensitive pair so users
 :: don't have to debug cryptic 'size changed' errors themselves.

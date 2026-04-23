@@ -11,7 +11,7 @@ echo ================================================================
 echo.
 
 :: ---- Check git ----
-where git 1>/dev/null 2>&1
+where git 1>nul 2>&1
 if errorlevel 1 (
     echo   [FAIL] git not found on this system.
     echo.
@@ -45,7 +45,7 @@ pause
 :: use `&&` chains on single lines to evaluate the errorlevel correctly.
 set "PY_CMD="
 for %%P in (py python python3) do if not defined PY_CMD (
-    %%P --version 1>/dev/null 2>&1 && set "PY_CMD=%%P"
+    %%P --version 1>nul 2>&1 && set "PY_CMD=%%P"
 )
 if not defined PY_CMD (
     echo   [FAIL] Python not found. Re-run setup.bat first.
@@ -56,7 +56,7 @@ echo   Using Python: %PY_CMD%
 
 :: ---- Resolve Node.js ----
 set "NODE_DIR="
-where node 1>/dev/null 2>&1 && (
+where node 1>nul 2>&1 && (
     for /f "delims=" %%p in ('where node') do (
         if not defined NODE_DIR for %%d in ("%%~dpp") do set "NODE_DIR=%%~fd"
     )
@@ -88,7 +88,7 @@ git diff --quiet
 set "HAS_LOCAL_CHANGES=%errorlevel%"
 if not "%HAS_LOCAL_CHANGES%"=="0" (
     echo   Local edits detected - stashing them temporarily...
-    git stash push -u -m "auto-stash by update.bat" >/dev/null
+    git stash push -u -m "auto-stash by update.bat" >nul
     set "STASHED=1"
 ) else (
     set "STASHED=0"
@@ -134,11 +134,11 @@ if "%OLD_REQ%"=="%NEW_REQ%" (
 )
 
 :: Import sanity check - heals numpy/pandas ABI mismatch silently
-%PY_CMD% -c "import fastapi, uvicorn, pandas, numpy, yfinance, playwright, apscheduler" 1>/dev/null 2>/dev/null
+%PY_CMD% -c "import fastapi, uvicorn, pandas, numpy, yfinance, playwright, apscheduler" 1>nul 2>nul
 if errorlevel 1 (
     echo   [WARN] Some backend imports failed - force-reinstalling core stack...
     %PY_CMD% -m pip install --upgrade --force-reinstall --no-cache-dir numpy pandas yfinance
-    %PY_CMD% -c "import fastapi, uvicorn, pandas, numpy, yfinance, playwright, apscheduler" 1>/dev/null 2>/dev/null
+    %PY_CMD% -c "import fastapi, uvicorn, pandas, numpy, yfinance, playwright, apscheduler" 1>nul 2>nul
     if errorlevel 1 (
         echo   [FAIL] Import check still failing. Run setup.bat for a fresh install.
         pause

@@ -179,6 +179,12 @@ def init_schema():
             );
             CREATE INDEX IF NOT EXISTS idx_disposed_dates ON disposed_stocks(start_date, end_date);
 
+            CREATE TABLE IF NOT EXISTS business_cycle_cache (
+                date       TEXT PRIMARY KEY,
+                data_json  TEXT NOT NULL,
+                fetched_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS eps_annual (
                 symbol      TEXT,
                 year        INTEGER,

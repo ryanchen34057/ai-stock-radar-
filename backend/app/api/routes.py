@@ -6,6 +6,7 @@ from app.services.news_service import get_news, get_aggregated_feed, refresh_all
 from app.services import kol_service
 from app.services import fb_service
 from app.services.youtube_service import get_mentions, run_youtube_pipeline
+from app.services import business_cycle_service
 from app.database import get_connection
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -465,6 +466,26 @@ def get_institutional(date: str | None = Query(default=None, description="YYYYMM
     except Exception as e:
         logger.error(f"Institutional data error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/business-cycle")
+def get_business_cycle(force: bool = Query(default=False)):
+    """
+    Near-real-time 景氣燈號 (6-tier). Reads from DB cache (refreshed daily by
+    scheduler). Pass ?force=true to recompute immediately.
+    """
+    conn = get_connection()
+    try:
+        if force:
+            snap = business_cycle_service.refresh_business_cycle(conn)
+        else:
+            snap = business_cycle_service.load_latest(conn)
+            if not snap:
+                snap = business_cycle_service.refresh_business_cycle(conn)
+        history = business_cycle_service.load_history(conn, days=60)
+        return {**snap, "history": history}
+    finally:
+        conn.close()
 
 
 @router.get("/setup/progress")

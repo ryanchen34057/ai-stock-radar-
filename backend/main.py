@@ -22,6 +22,7 @@ from app.services.disposal_service import ensure_disposal_current, refresh_dispo
 from app.services.institutional_service import backfill_institutional_history
 from app.services import setup_progress
 from app.services.shareholding_service import refresh_shareholding_weekly
+from app.services.business_cycle_service import refresh_business_cycle
 from app.services import fb_service, kol_service, twse_mis_service
 
 logging.basicConfig(
@@ -148,6 +149,23 @@ async def lifespan(app: FastAPI):
         id="weekly_shareholding",
         replace_existing=True,
     )
+
+    # 景氣燈號 — daily at 07:00 (before market open) so intraday dashboard
+    # reflects the overnight moves in SOX / US yields / TSM ADR / USDTWD.
+    def _biz_cycle_job():
+        c = get_connection()
+        try:
+            refresh_business_cycle(c)
+        finally:
+            c.close()
+    scheduler.add_job(
+        _biz_cycle_job,
+        CronTrigger(hour=7, minute=0, timezone="Asia/Taipei"),
+        id="daily_business_cycle",
+        replace_existing=True,
+    )
+    # Run once at startup so the widget has data immediately
+    threading.Thread(target=_biz_cycle_job, daemon=True).start()
 
     # Schedule YouTube pipeline at 18:30 Taipei time (show uploads ~18:00)
     def _yt_job():

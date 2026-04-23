@@ -5,6 +5,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ControlBar } from './ControlBar';
 import { StatsSummary } from './StatsSummary';
 import { StockGrid } from './StockGrid';
+import { BusinessCycle } from './BusinessCycle';
 
 export function Dashboard() {
   const {
@@ -29,6 +30,7 @@ export function Dashboard() {
   return (
     <div className="bg-dash-bg text-text-p">
       <ControlBar />
+      <BusinessCycle />
 
       <div className="px-4 py-4">
         {/* Error */}

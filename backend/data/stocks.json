@@ -1646,10 +1646,10 @@
   {
     "symbol": "1717",
     "name": "長興",
-    "layer": 4,
-    "layer_name": "PCB 載板",
-    "sub_category": "PCB 材料/化工",
-    "note": "環氧樹脂與特殊化學品，CCL基板核心原料",
+    "layer": 17,
+    "layer_name": "特用化學材料",
+    "sub_category": "環氧樹脂",
+    "note": "環氧樹脂/電子化學品",
     "theme": "A",
     "tier": 3,
     "enabled": true
@@ -1701,12 +1701,12 @@
   {
     "symbol": "3013",
     "name": "晟銘電",
-    "layer": 9,
-    "layer_name": "ODM 組裝",
-    "sub_category": "伺服器機殼",
-    "note": "AI伺服器機殼，供應MTIA 2",
+    "layer": 6,
+    "layer_name": "散熱電源",
+    "sub_category": "液冷散熱模組",
+    "note": "液冷散熱模組",
     "theme": "A",
-    "tier": 3,
+    "tier": 1,
     "enabled": true
   },
   {
@@ -2191,6 +2191,127 @@
     "note": "金融/政府 IT",
     "theme": "A",
     "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "5347",
+    "name": "世界先進",
+    "layer": 1,
+    "layer_name": "晶片設計與製造",
+    "sub_category": "晶圓代工",
+    "note": "8吋晶圓代工龍頭",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "6613",
+    "name": "朋億",
+    "layer": 10,
+    "layer_name": "電力基礎建設",
+    "sub_category": "特氣/廢水處理",
+    "note": "半導體廠特氣與廢水統包",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "7769",
+    "name": "鴻勁精密",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "測試設備",
+    "note": "IC 測試 handler 全球龍頭",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "5284",
+    "name": "jpp-KY",
+    "layer": 18,
+    "layer_name": "機殼滑軌結構件",
+    "sub_category": "機殼",
+    "note": "鴻海旗下伺服器機殼",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "6190",
+    "name": "萬泰科",
+    "layer": 25,
+    "layer_name": "連接器與線材",
+    "sub_category": "連接器",
+    "note": "車用/工業連接器",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "4919",
+    "name": "新唐",
+    "layer": 1,
+    "layer_name": "晶片設計與製造",
+    "sub_category": "IC 設計",
+    "note": "微控制器 MCU / 電源 IC",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "6412",
+    "name": "群電",
+    "layer": 6,
+    "layer_name": "散熱電源",
+    "sub_category": "電源",
+    "note": "伺服器電源供應器",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "3323",
+    "name": "加百裕",
+    "layer": 6,
+    "layer_name": "散熱電源",
+    "sub_category": "電池",
+    "note": "電池模組",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "6117",
+    "name": "迎廣",
+    "layer": 18,
+    "layer_name": "機殼滑軌結構件",
+    "sub_category": "機殼",
+    "note": "伺服器/PC 機殼",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "1582",
+    "name": "信錦",
+    "layer": 18,
+    "layer_name": "機殼滑軌結構件",
+    "sub_category": "結構件",
+    "note": "面板軸承與結構件",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
+    "symbol": "8103",
+    "name": "瀚荃",
+    "layer": 25,
+    "layer_name": "連接器與線材",
+    "sub_category": "連接器",
+    "note": "車用連接器",
+    "theme": "A",
+    "tier": 2,
     "enabled": true
   }
 ]

@@ -22,6 +22,7 @@ from app.services.disposal_service import ensure_disposal_current, refresh_dispo
 from app.services.institutional_service import backfill_institutional_history
 from app.services import setup_progress
 from app.services.shareholding_service import refresh_shareholding_weekly
+from app.services.indices_service import refresh_all_indices as refresh_indices
 from app.services.business_cycle_service import refresh_business_cycle, refresh_percentiles
 from app.services import fb_service, kol_service, twse_mis_service
 
@@ -85,6 +86,10 @@ async def lifespan(app: FastAPI):
             refresh_shareholding_weekly()
         except Exception as e:
             logger.error(f"shareholding refresh failed: {e}")
+        try:
+            refresh_indices(period="5y")
+        except Exception as e:
+            logger.error(f"indices refresh failed: {e}")
         setup_progress.mark_all_done()
 
     threading.Thread(target=_startup_data_sweep, daemon=True).start()
@@ -147,6 +152,15 @@ async def lifespan(app: FastAPI):
         lambda: refresh_shareholding_weekly(),
         CronTrigger(day_of_week="fri", hour=19, minute=0, timezone="Asia/Taipei"),
         id="weekly_shareholding",
+        replace_existing=True,
+    )
+
+    # Market indices (TAIEX, SOX, DJI, ...) — daily after US close settles
+    # (~06:30 Taipei), so widget shows overnight US move before TW open.
+    scheduler.add_job(
+        lambda: refresh_indices(period="1y"),
+        CronTrigger(hour=6, minute=30, timezone="Asia/Taipei"),
+        id="daily_indices",
         replace_existing=True,
     )
 

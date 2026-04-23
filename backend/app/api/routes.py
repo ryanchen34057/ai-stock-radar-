@@ -7,6 +7,7 @@ from app.services import kol_service
 from app.services import fb_service
 from app.services.youtube_service import get_mentions, run_youtube_pipeline
 from app.services import business_cycle_service
+from app.services import indices_service
 from app.database import get_connection
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -303,6 +304,18 @@ def get_dashboard():
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/indices")
+def get_indices(days: int = Query(default=90, ge=20, le=1300)):
+    """Market indices widget data — TAIEX, SOX, Dow, NASDAQ, etc."""
+    return {"indices": indices_service.get_indices_data(days=days)}
+
+
+@router.post("/indices/refresh")
+def post_indices_refresh():
+    """Manually re-fetch all indices from yfinance."""
+    return indices_service.refresh_all_indices()
 
 
 @router.post("/refresh")

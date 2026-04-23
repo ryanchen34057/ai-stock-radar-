@@ -6,6 +6,7 @@ import { ControlBar } from './ControlBar';
 import { StatsSummary } from './StatsSummary';
 import { StockGrid } from './StockGrid';
 import { BusinessCycle } from './BusinessCycle';
+import { MarketIndices } from './MarketIndices';
 
 export function Dashboard() {
   const {
@@ -29,6 +30,7 @@ export function Dashboard() {
 
   return (
     <div className="bg-dash-bg text-text-p">
+      <MarketIndices />
       <ControlBar />
       <BusinessCycle />
 

@@ -199,24 +199,25 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
             d.value !== null);
       };
 
+      // Upper + Lower: dashed lines with compact right-axis value tag (no title
+      // prefix so the tag sits flush against the line terminus).
       const upperS = chart.addLineSeries({
-        color: 'rgba(187,137,255,0.85)', lineWidth: 1, lineStyle: 2,
+        color: 'rgba(187,137,255,0.9)', lineWidth: 1, lineStyle: 2,
         crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false,
-        title: 'BB Upper',
       });
       upperS.setData(toData(bb.upper));
 
       const lowerS = chart.addLineSeries({
-        color: 'rgba(187,137,255,0.85)', lineWidth: 1, lineStyle: 2,
+        color: 'rgba(187,137,255,0.9)', lineWidth: 1, lineStyle: 2,
         crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false,
-        title: 'BB Lower',
       });
       lowerS.setData(toData(bb.lower));
 
+      // Mid line is essentially MA20 -- draw it but skip the right-axis tag to
+      // avoid stacking on top of MA20's tag.
       const midS = chart.addLineSeries({
-        color: 'rgba(187,137,255,0.5)', lineWidth: 1,
+        color: 'rgba(187,137,255,0.45)', lineWidth: 1,
         crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
-        title: 'BB Mid',
       });
       midS.setData(toData(bb.middle));
     }

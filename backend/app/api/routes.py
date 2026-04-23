@@ -53,7 +53,7 @@ _fb_login_running = False
 _fb_login_started_at: str | None = None
 _fb_login_last_result: dict | None = None
 
-_SETTINGS_KEYS = {"YOUTUBE_API_KEY", "GEMINI_API_KEY", "YOUTUBE_CHANNEL_ID", "GEMINI_MODEL"}
+_SETTINGS_KEYS = {"YOUTUBE_API_KEY", "GEMINI_API_KEY", "YOUTUBE_CHANNEL_ID", "GEMINI_MODEL", "FINMIND_TOKEN"}
 
 
 class SettingsPayload(BaseModel):
@@ -61,6 +61,7 @@ class SettingsPayload(BaseModel):
     GEMINI_API_KEY: str = ""
     YOUTUBE_CHANNEL_ID: str = ""
     GEMINI_MODEL: str = ""
+    FINMIND_TOKEN: str = ""
 
 
 def _mask(key: str) -> str:

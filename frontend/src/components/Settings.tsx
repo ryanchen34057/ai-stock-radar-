@@ -11,6 +11,7 @@ interface KeyStatus {
 interface SettingsData {
   YOUTUBE_API_KEY: KeyStatus;
   GEMINI_API_KEY: KeyStatus;
+  FINMIND_TOKEN: KeyStatus;
   GEMINI_MODEL?: KeyStatus;  // in _PLAIN_KEYS, .masked holds the raw value
 }
 
@@ -96,11 +97,14 @@ export function Settings() {
   const [data, setData] = useState<SettingsData>({
     YOUTUBE_API_KEY: { configured: false, masked: '' },
     GEMINI_API_KEY: { configured: false, masked: '' },
+    FINMIND_TOKEN:   { configured: false, masked: '' },
   });
   const [ytValue, setYtValue] = useState('');
   const [ytShow, setYtShow] = useState(false);
   const [geminiValue, setGeminiValue] = useState('');
   const [geminiShow, setGeminiShow] = useState(false);
+  const [finmindValue, setFinmindValue] = useState('');
+  const [finmindShow, setFinmindShow] = useState(false);
   const [geminiModel, setGeminiModel] = useState<string>('gemini-2.5-flash-lite');
   const [modelDirty, setModelDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -131,6 +135,7 @@ export function Settings() {
     const body: Record<string, string> = {};
     if (ytValue.trim()) body.YOUTUBE_API_KEY = ytValue.trim();
     if (geminiValue.trim()) body.GEMINI_API_KEY = geminiValue.trim();
+    if (finmindValue.trim()) body.FINMIND_TOKEN = finmindValue.trim();
     if (modelDirty) body.GEMINI_MODEL = geminiModel;
 
     if (Object.keys(body).length === 0) return;
@@ -205,6 +210,18 @@ export function Settings() {
               show={geminiShow}
               onChange={setGeminiValue}
               onToggleShow={() => setGeminiShow((p) => !p)}
+            />
+
+            <KeyField
+              label="FinMind Token"
+              description="景氣燈號的「海關出口 / 外銷訂單」月頻指標、以及部分 EPS 資料透過 FinMind 取得。免費註冊即可得 Token，每日 300 次 quota 夠用。設定後需重啟後端。"
+              helpUrl="https://finmindtrade.com/analysis/#/data/api"
+              configured={data.FINMIND_TOKEN.configured}
+              masked={data.FINMIND_TOKEN.masked}
+              value={finmindValue}
+              show={finmindShow}
+              onChange={setFinmindValue}
+              onToggleShow={() => setFinmindShow((p) => !p)}
             />
 
             <div className="bg-card-bg border border-border-c rounded-lg p-5 space-y-3">

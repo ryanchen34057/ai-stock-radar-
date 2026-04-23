@@ -88,12 +88,54 @@ export function BusinessCycle() {
         onClick={() => setExpanded(e => !e)}
         className="w-full flex items-center gap-4 px-4 py-3 hover:bg-card-hover transition-colors"
       >
-        {/* Big colored dot */}
-        <div
-          className="w-14 h-14 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0 shadow-lg"
-          style={{ backgroundColor: data.color, boxShadow: `0 0 20px ${data.color}55` }}
-        >
-          {data.total_score?.toFixed(0)}
+        {/* Realistic glowing light bulb */}
+        <div className="relative w-20 h-20 flex items-center justify-center flex-shrink-0">
+          {/* Outer halo — pulsing glow */}
+          <div
+            className="absolute inset-0 rounded-full bulb-halo pointer-events-none"
+            style={{
+              background: `radial-gradient(circle, ${data.color}BB 0%, ${data.color}55 35%, transparent 70%)`,
+              filter: 'blur(10px)',
+            }}
+          />
+          {/* Second halo layer (larger, slower — softens the pulse) */}
+          <div
+            className="absolute inset-[-8px] rounded-full pointer-events-none"
+            style={{
+              background: `radial-gradient(circle, ${data.color}44 0%, transparent 70%)`,
+              filter: 'blur(16px)',
+            }}
+          />
+          {/* Bulb body */}
+          <div
+            className="relative w-14 h-14 rounded-full bulb-body flex items-center justify-center"
+            style={{
+              background: `radial-gradient(circle at 32% 28%,
+                                #ffffffee 0%,
+                                ${data.color} 38%,
+                                ${data.color} 65%,
+                                rgba(0,0,0,0.25) 100%)`,
+              boxShadow: `
+                inset -4px -5px 10px rgba(0,0,0,0.35),
+                inset 3px 3px 6px rgba(255,255,255,0.35),
+                0 0 22px ${data.color}AA,
+                0 0 38px ${data.color}66
+              `,
+            }}
+          >
+            {/* Tiny highlight dot (like glass reflection) */}
+            <div
+              className="absolute top-1.5 left-2.5 w-2.5 h-2 rounded-full pointer-events-none"
+              style={{
+                background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, transparent 75%)',
+                filter: 'blur(0.5px)',
+              }}
+            />
+            {/* Score number */}
+            <span className="relative text-white font-bold text-lg tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
+              {data.total_score?.toFixed(0)}
+            </span>
+          </div>
         </div>
 
         {/* Label + state */}

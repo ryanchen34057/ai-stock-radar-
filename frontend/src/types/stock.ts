@@ -164,6 +164,19 @@ export interface BBProximityFilter {
   threshold: number;
 }
 
+/**
+ * "布林通道狹窄" filter — catch stocks currently in a squeeze (precursor to
+ * breakout). Level is a percentile threshold over last 120 bars' BBW:
+ *   mild     — current BBW ≤ 40th percentile (slightly compressed)
+ *   moderate — current BBW ≤ 25th percentile (quite compressed)
+ *   extreme  — current BBW ≤ 10th percentile (very compressed, imminent breakout)
+ */
+export type BBSqueezeLevel = 'mild' | 'moderate' | 'extreme';
+export interface BBSqueezeFilter {
+  enabled: boolean;
+  level: BBSqueezeLevel;
+}
+
 export interface SpecialFilters {
   maBullishAlignment: boolean; // MA5 > MA10 > MA20 > MA60
   price20DayHigh: boolean;     // today close = 20-day high

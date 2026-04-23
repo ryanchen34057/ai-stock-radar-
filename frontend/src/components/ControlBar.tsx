@@ -109,6 +109,8 @@ export function ControlBar() {
   const setBBUpperCrossFilter = useDashboardStore((s) => s.setBBUpperCrossFilter);
   const bbProximityFilter = useDashboardStore((s) => s.bbProximityFilter);
   const setBBProximityFilter = useDashboardStore((s) => s.setBBProximityFilter);
+  const bbSqueezeFilter = useDashboardStore((s) => s.bbSqueezeFilter);
+  const setBBSqueezeFilter = useDashboardStore((s) => s.setBBSqueezeFilter);
   const { refresh } = useStockData();
 
   // ── Search autocomplete ──
@@ -529,6 +531,41 @@ export function ControlBar() {
             {bbProximityFilter.threshold}%
           </span>
         )}
+
+        {/* BB squeeze (通道狹窄) */}
+        <div className="flex items-center gap-1 pl-3 ml-2 border-l border-border-c">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={bbSqueezeFilter.enabled}
+              onChange={(e) => setBBSqueezeFilter({ ...bbSqueezeFilter, enabled: e.target.checked })}
+              className="accent-purple-400 w-3.5 h-3.5"
+            />
+            <span className="text-sm font-semibold text-white">通道狹窄</span>
+          </label>
+          {(['mild', 'moderate', 'extreme'] as const).map((lv) => {
+            const active = bbSqueezeFilter.enabled && bbSqueezeFilter.level === lv;
+            const label = lv === 'mild' ? '輕度 (≤40%)' : lv === 'moderate' ? '中度 (≤25%)' : '極度 (≤10%)';
+            return (
+              <button
+                key={lv}
+                onClick={() => setBBSqueezeFilter({ ...bbSqueezeFilter, enabled: true, level: lv })}
+                className={`px-2 py-1 text-xs rounded transition-colors border ${
+                  active
+                    ? 'bg-purple-500/30 text-purple-200 border-purple-500/60 font-semibold'
+                    : 'bg-card-bg text-text-s border-border-c hover:text-text-p'
+                }`}
+                title={lv === 'extreme'
+                  ? '當前 BBW 位於過去 120 日分布的最低 10% — 極度壓縮, 突破在即'
+                  : lv === 'moderate'
+                    ? '當前 BBW 位於過去 120 日分布的最低 25% — 明顯壓縮'
+                    : '當前 BBW 位於過去 120 日分布的最低 40% — 輕度壓縮'}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Row 2b: 快破前高 (W / U / cup / flat base breakout-pending) ── */}

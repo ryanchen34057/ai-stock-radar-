@@ -76,6 +76,58 @@ export interface BBExpansionResult {
 }
 
 /**
+ * "布林通道狹窄" detection — current BBW percentile over recent history.
+ * Returns the percentile (0-100) where current BBW sits within the last N
+ * trading days' BBW distribution. Low percentile = squeeze (通道狹窄).
+ *
+ *   history: number of bars to use as the reference distribution (default 120)
+ */
+export interface BBSqueezeResult {
+  percentile: number;    // 0-100, lower = tighter
+  currentBBW: number;
+  minBBW: number;        // min BBW over the history window
+  medianBBW: number;
+}
+
+export function analyzeBBSqueeze(
+  closes: number[],
+  opts: { history?: number; period?: number; stdev?: number } = {},
+): BBSqueezeResult | null {
+  const history = opts.history ?? 120;
+  const period = opts.period ?? 20;
+  const stdev = opts.stdev ?? 2;
+
+  const bbw = calculateBBW(closes, period, stdev);
+  const n = bbw.length;
+  if (n < period + 5) return null;
+
+  const current = bbw[n - 1];
+  if (current === null) return null;
+
+  // Build sample of recent BBW values
+  const start = Math.max(period - 1, n - history);
+  const sample: number[] = [];
+  for (let i = start; i < n; i++) {
+    const v = bbw[i];
+    if (v !== null) sample.push(v);
+  }
+  if (sample.length < 10) return null;
+
+  const sorted = [...sample].sort((a, b) => a - b);
+  // Rank of current value within sorted sample
+  const rank = sorted.filter((x) => x <= current).length;
+  const percentile = (rank / sorted.length) * 100;
+
+  return {
+    percentile,
+    currentBBW: current,
+    minBBW: sorted[0],
+    medianBBW: sorted[Math.floor(sorted.length / 2)],
+  };
+}
+
+
+/**
  * "剛站上布林上軌" signal — detect the most recent close ≥ upper-band cross-up
  * (close was below yesterday, at/above today). Returns how many trading days
  * ago the cross happened so callers can gate by a window.

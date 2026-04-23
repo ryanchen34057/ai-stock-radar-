@@ -10,7 +10,7 @@ import { BusinessCycle } from './BusinessCycle';
 export function Dashboard() {
   const {
     stocks, loading, error,
-    selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, specialFilters, instiFilters,
+    selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, specialFilters, instiFilters,
     priceFilter, peFilter, kdFilters,
     themeFilter, tierFilter, searchQuery,
     selectedLayers, sortBy,
@@ -69,6 +69,7 @@ export function Dashboard() {
               breakoutPendingFilter={breakoutPendingFilter}
               bbUpperCrossFilter={bbUpperCrossFilter}
               bbProximityFilter={bbProximityFilter}
+              bbSqueezeFilter={bbSqueezeFilter}
               specialFilters={specialFilters}
               instiFilters={instiFilters}
               priceFilter={priceFilter}

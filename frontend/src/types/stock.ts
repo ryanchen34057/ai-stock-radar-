@@ -145,6 +145,25 @@ export interface BBUpperCrossFilter {
   requireStillAbove: boolean;
 }
 
+/**
+ * BB 相對位置 filter — where today's close sits relative to a chosen band.
+ *
+ *   band       — upper / middle / lower
+ *   direction  — close is `above` / `below` / `at` (within ±threshold of) the band
+ *   threshold  — percentage distance
+ *
+ * Example: { band: 'upper', direction: 'at', threshold: 2 }
+ *          → close is within ±2% of upper band (贴近上軌)
+ * Example: { band: 'lower', direction: 'below', threshold: 3 }
+ *          → close is 0–3% below lower band (穿破下軌的程度)
+ */
+export interface BBProximityFilter {
+  enabled: boolean;
+  band: 'upper' | 'middle' | 'lower';
+  direction: 'above' | 'at' | 'below';
+  threshold: number;
+}
+
 export interface SpecialFilters {
   maBullishAlignment: boolean; // MA5 > MA10 > MA20 > MA60
   price20DayHigh: boolean;     // today close = 20-day high

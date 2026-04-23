@@ -104,6 +104,8 @@ export function ControlBar() {
   const toggleBollinger = useDashboardStore((s) => s.toggleBollinger);
   const bbUpperCrossFilter = useDashboardStore((s) => s.bbUpperCrossFilter);
   const setBBUpperCrossFilter = useDashboardStore((s) => s.setBBUpperCrossFilter);
+  const bbProximityFilter = useDashboardStore((s) => s.bbProximityFilter);
+  const setBBProximityFilter = useDashboardStore((s) => s.setBBProximityFilter);
   const { refresh } = useStockData();
 
   // ── Search autocomplete ──
@@ -425,6 +427,70 @@ export function ControlBar() {
             {maProximityFilter.direction === 'above' ? '上方' :
              maProximityFilter.direction === 'below' ? '下方' : '±'}
             {maProximityFilter.threshold}%
+          </span>
+        )}
+      </div>
+
+      {/* ── Row 2a: BB 相對位置 ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={bbProximityFilter.enabled}
+            onChange={(e) => setBBProximityFilter({ ...bbProximityFilter, enabled: e.target.checked })}
+            className="accent-purple-400 w-3.5 h-3.5"
+          />
+          <span className="text-sm font-semibold text-white">布林位置</span>
+        </label>
+        <select
+          value={bbProximityFilter.band}
+          disabled={!bbProximityFilter.enabled}
+          onChange={(e) => setBBProximityFilter({
+            ...bbProximityFilter,
+            band: e.target.value as 'upper' | 'middle' | 'lower',
+          })}
+          className="text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                     focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <option value="upper">BB 上軌</option>
+          <option value="middle">BB 中軌</option>
+          <option value="lower">BB 下軌</option>
+        </select>
+        {(['above', 'at', 'below'] as const).map((dir) => (
+          <button
+            key={dir}
+            disabled={!bbProximityFilter.enabled}
+            onClick={() => setBBProximityFilter({ ...bbProximityFilter, direction: dir })}
+            className={`px-2 py-1 text-xs rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              bbProximityFilter.direction === dir && bbProximityFilter.enabled
+                ? dir === 'above' ? 'bg-tw-down text-white'
+                  : dir === 'below' ? 'bg-tw-up text-white'
+                  : 'bg-purple-500/60 text-white'
+                : 'bg-card-bg text-text-s border border-border-c hover:text-text-p'
+            }`}
+          >
+            {dir === 'above' ? '上方' : dir === 'below' ? '下方' : '貼近'}
+          </button>
+        ))}
+        <div className="flex items-center gap-1">
+          <input
+            type="number" min={0.1} max={30} step={0.5}
+            value={bbProximityFilter.threshold}
+            disabled={!bbProximityFilter.enabled}
+            onChange={(e) => setBBProximityFilter({
+              ...bbProximityFilter, threshold: Math.max(0.1, parseFloat(e.target.value) || 1),
+            })}
+            className="w-14 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                       text-center focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          <span className="text-xs text-text-t">% 以內</span>
+        </div>
+        {bbProximityFilter.enabled && (
+          <span className="text-xs text-purple-300 font-mono">
+            ▸ {bbProximityFilter.band === 'upper' ? '上軌' : bbProximityFilter.band === 'middle' ? '中軌' : '下軌'}{' '}
+            {bbProximityFilter.direction === 'above' ? '上方' :
+             bbProximityFilter.direction === 'below' ? '下方' : '±'}
+            {bbProximityFilter.threshold}%
           </span>
         )}
       </div>

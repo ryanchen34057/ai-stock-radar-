@@ -280,33 +280,58 @@ def ensure_finmind_current(stale_hours: float = 24.0) -> dict:
         logger.info("ensure_finmind_current: all stocks fresh")
         return {"targets": 0, "success": 0, "failed": []}
 
-    logger.info(f"ensure_finmind_current: {len(targets)}/{len(rows)} stocks need FinMind refresh")
-    success = 0
-    failed = []
-    for i, sym in enumerate(targets):
-        # Get last close for dividend yield calc
-        conn = get_connection()
-        try:
+    logger.info(f"ensure_finmind_current: {len(targets)}/{len(rows)} stocks need FinMind refresh — parallelised 3 workers")
+    from app.services import setup_progress as _prog
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
+    _prog.begin("finmind", total=len(targets))
+
+    # Pre-load name + latest close for every symbol so workers don't hit the DB
+    # inside their loop (avoids WAL contention and shows nicer progress labels).
+    conn = get_connection()
+    try:
+        name_map = {r["symbol"]: r["name"] for r in conn.execute(
+            "SELECT symbol, name FROM stocks"
+        ).fetchall()}
+        price_map: dict[str, float | None] = {}
+        for sym in targets:
             row = conn.execute(
                 "SELECT close FROM klines WHERE symbol=? ORDER BY date DESC LIMIT 1",
                 (sym,),
             ).fetchone()
-            price = row["close"] if row else None
-        finally:
-            conn.close()
+            price_map[sym] = row["close"] if row else None
+    finally:
+        conn.close()
+
+    done_counter = [0]
+    done_lock = threading.Lock()
+
+    def _fetch_one(sym: str) -> tuple[str, bool, str]:
         try:
-            r = refresh_one_stock_from_finmind(sym, price)
-            logger.info(
-                f"  [{i+1}/{len(targets)}] {sym}: TTM EPS={r['ttm_eps']}, "
-                f"{r['monthly_period']} YoY={r['monthly_yoy_pct']:.1f}% "
-                f"DivY={r['ttm_dividend_yield_pct']}" if r["monthly_yoy_pct"] is not None
-                else f"  [{i+1}/{len(targets)}] {sym}: TTM EPS={r['ttm_eps']} (no YoY)"
-            )
-            success += 1
+            r = refresh_one_stock_from_finmind(sym, price_map.get(sym))
+            return (sym, True, f"TTM EPS={r.get('ttm_eps')}")
         except Exception as e:
-            logger.error(f"  [{i+1}/{len(targets)}] {sym} failed: {e}")
-            failed.append(sym)
-        time.sleep(random.uniform(*SLEEP_RANGE))
+            return (sym, False, str(e))
+        finally:
+            with done_lock:
+                done_counter[0] += 1
+                _prog.update(current=done_counter[0], symbol=sym,
+                             name=name_map.get(sym, sym))
+
+    success = 0
+    failed = []
+    # 3 workers — FinMind free tier has a per-hour request cap, keep concurrency
+    # modest to avoid 402 rate-limits (paid-tier tokens can handle much more).
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        future_map = {ex.submit(_fetch_one, s): s for s in targets}
+        for fut in as_completed(future_map):
+            sym, ok, msg = fut.result()
+            if ok:
+                success += 1
+                logger.info(f"  ✓ {sym}: {msg}")
+            else:
+                failed.append(sym)
+                logger.info(f"  – {sym}: {msg}")
 
     logger.info(f"ensure_finmind_current done: {success} ok, {len(failed)} failed")
     return {"targets": len(targets), "success": success, "failed": failed}

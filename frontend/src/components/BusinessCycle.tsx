@@ -351,13 +351,31 @@ function LedLight({ color, score }: { color: string; score: number }) {
   }
 
   return (
-    <div className="relative flex items-center justify-center" style={{ width: 180, height: 180 }}>
+    <div className="relative flex items-center justify-center" style={{ width: 200, height: 200, color }}>
+      {/* Outward radiating rings ("ping") — expanding then fading, infinite */}
+      <div
+        className="absolute rounded-full bulb-ping pointer-events-none"
+        style={{
+          inset: '10px',
+          border: `3px solid ${color}`,
+          boxShadow: `0 0 20px ${color}88`,
+        }}
+      />
+      <div
+        className="absolute rounded-full bulb-ping pointer-events-none"
+        style={{
+          inset: '10px',
+          border: `2px solid ${color}`,
+          animationDelay: '1.3s',
+        }}
+      />
+
       {/* Outer pulsing halo */}
       <div
         className="absolute inset-0 rounded-full bulb-halo pointer-events-none"
         style={{
-          background: `radial-gradient(circle, ${color}AA 0%, ${color}33 45%, transparent 75%)`,
-          filter: 'blur(14px)',
+          background: `radial-gradient(circle, ${color}CC 0%, ${color}55 40%, transparent 72%)`,
+          filter: 'blur(16px)',
         }}
       />
       {/* Wider softer halo */}
@@ -365,8 +383,8 @@ function LedLight({ color, score }: { color: string; score: number }) {
         className="absolute rounded-full pointer-events-none"
         style={{
           inset: '-20px',
-          background: `radial-gradient(circle, ${color}33 0%, transparent 70%)`,
-          filter: 'blur(22px)',
+          background: `radial-gradient(circle, ${color}55 0%, ${color}22 40%, transparent 70%)`,
+          filter: 'blur(28px)',
         }}
       />
 

@@ -56,21 +56,27 @@
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
 
-/* Business-cycle light bulb: slow breathing halo + faint random flicker */
+/* Business-cycle light bulb: continuously emitting bright halo + radiating
+   rings + subtle body brightness pulse. Makes the bulb feel alive. */
 @keyframes bulb-halo {
-  0%, 100% { opacity: 0.55; transform: scale(1); }
-  50%      { opacity: 0.95; transform: scale(1.12); }
+  0%, 100% { opacity: 0.5;  transform: scale(0.95); }
+  50%      { opacity: 1.0;  transform: scale(1.25); }
 }
-@keyframes bulb-flicker {
-  0%, 100%       { filter: brightness(1.0); }
-  8%, 14%        { filter: brightness(1.12); }
-  16%, 20%       { filter: brightness(0.94); }
-  41%, 44%       { filter: brightness(1.06); }
-  66%, 72%       { filter: brightness(0.97); }
+@keyframes bulb-ping {
+  0%   { opacity: 0.9; transform: scale(0.88); }
+  80%  { opacity: 0;   transform: scale(1.6); }
+  100% { opacity: 0;   transform: scale(1.6); }
+}
+@keyframes bulb-shine {
+  0%, 100% { filter: brightness(1.0)  drop-shadow(0 0 6px currentColor); }
+  50%      { filter: brightness(1.25) drop-shadow(0 0 18px currentColor); }
 }
 .bulb-halo {
-  animation: bulb-halo 2.8s ease-in-out infinite;
+  animation: bulb-halo 2.2s ease-in-out infinite;
+}
+.bulb-ping {
+  animation: bulb-ping 2.6s cubic-bezier(0.25, 0.8, 0.4, 1) infinite;
 }
 .bulb-body {
-  animation: bulb-flicker 7s ease-in-out infinite;
+  animation: bulb-shine 2.2s ease-in-out infinite;
 }

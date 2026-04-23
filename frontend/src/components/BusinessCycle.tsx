@@ -328,28 +328,10 @@ function PmiSetter({ onUpdated }: { onUpdated: () => void }) {
 }
 
 /**
- * Traffic-light style LED face — dark bezel + many small LED dots in concentric
- * rings (like a real semaphore/signal head). Surrounded by a pulsing halo.
+ * Smooth glowing traffic-light bulb — dark bezel + uniform glass lens with
+ * soft gradient glow (no LED dot matrix). Surrounded by pulsing halo + pings.
  */
 function LedLight({ color, score }: { color: string; score: number }) {
-  const dots: { x: number; y: number }[] = [];
-  // Center LED
-  dots.push({ x: 0, y: 0 });
-  // Concentric rings — dot count scales with circumference
-  const rings = [
-    { r: 13, count: 8 },
-    { r: 24, count: 14 },
-    { r: 35, count: 20 },
-    { r: 46, count: 26 },
-    { r: 57, count: 32 },
-  ];
-  for (const { r, count } of rings) {
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
-      dots.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
-    }
-  }
-
   return (
     <div className="relative flex items-center justify-center" style={{ width: 200, height: 200, color }}>
       {/* Outward radiating rings ("ping") — expanding then fading, infinite */}
@@ -390,17 +372,15 @@ function LedLight({ color, score }: { color: string; score: number }) {
 
       <svg viewBox="-80 -80 160 160" width="160" height="160" className="relative bulb-body">
         <defs>
-          <radialGradient id="led-dot" cx="35%" cy="30%" r="65%">
-            <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.95" />
-            <stop offset="35%"  stopColor={color}    stopOpacity="1" />
-            <stop offset="100%" stopColor={color}    stopOpacity="0.85" />
+          <radialGradient id="lens-glow" cx="38%" cy="32%" r="68%">
+            {/* bright core -> main color -> slightly darker rim */}
+            <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.9"  />
+            <stop offset="18%"  stopColor={color}   stopOpacity="1"    />
+            <stop offset="60%"  stopColor={color}   stopOpacity="0.95" />
+            <stop offset="100%" stopColor={color}   stopOpacity="0.55" />
           </radialGradient>
-          <radialGradient id="lens-bg" cx="50%" cy="50%" r="55%">
-            <stop offset="0%"   stopColor={color}  stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#000"   stopOpacity="0.85" />
-          </radialGradient>
-          <filter id="led-blur" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="0.5" />
+          <filter id="soft-blur" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="1" />
           </filter>
         </defs>
 
@@ -409,24 +389,27 @@ function LedLight({ color, score }: { color: string; score: number }) {
         <circle cx="0" cy="0" r="75" fill="#2a2a2a" />
         <circle cx="0" cy="0" r="72" fill="#111" />
 
-        {/* Lens background (tinted + dark center to enhance LED contrast) */}
-        <circle cx="0" cy="0" r="70" fill="url(#lens-bg)" />
+        {/* Smooth glass lens with bright gradient glow */}
+        <circle cx="0" cy="0" r="70" fill="url(#lens-glow)" />
 
-        {/* LED dots */}
-        {dots.map((d, i) => (
-          <circle
-            key={i}
-            cx={d.x}
-            cy={d.y}
-            r="3.8"
-            fill="url(#led-dot)"
-            filter="url(#led-blur)"
-          />
-        ))}
+        {/* Subtle inner shadow ring to anchor the lens inside the bezel */}
+        <circle
+          cx="0" cy="0" r="70"
+          fill="none"
+          stroke="rgba(0,0,0,0.35)"
+          strokeWidth="2"
+        />
 
-        {/* Subtle top glass reflection */}
-        <ellipse cx="-18" cy="-32" rx="30" ry="12"
-                 fill="white" opacity="0.08" filter="url(#led-blur)" />
+        {/* Top glass highlight — thick soft-focus reflection */}
+        <ellipse
+          cx="-15" cy="-30" rx="40" ry="15"
+          fill="white" opacity="0.22" filter="url(#soft-blur)"
+        />
+        {/* Small concentrated highlight */}
+        <ellipse
+          cx="-22" cy="-38" rx="12" ry="5"
+          fill="white" opacity="0.5" filter="url(#soft-blur)"
+        />
 
         {/* Large score number */}
         <text

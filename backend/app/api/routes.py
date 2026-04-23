@@ -65,11 +65,12 @@ class SettingsPayload(BaseModel):
 
 
 def _mask(key: str) -> str:
+    """Mask with a fixed 8-asterisk middle so long JWT tokens don't overflow UI."""
     if not key:
         return ""
     if len(key) <= 8:
         return "*" * len(key)
-    return key[:4] + "*" * (len(key) - 8) + key[-4:]
+    return key[:4] + "********" + key[-4:]
 
 
 @router.get("/stocks")

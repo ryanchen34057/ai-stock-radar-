@@ -63,6 +63,7 @@ const DEFAULT_SPECIAL: SpecialFilters = {
   pullbackReclaim10: false,
   pullbackReclaim20: false,
   bigHolderIncrease: false,
+  bbExpansion:       false,
 };
 
 const DEFAULT_INSTI: InstiFilters = {

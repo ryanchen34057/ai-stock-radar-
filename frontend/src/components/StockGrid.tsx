@@ -3,6 +3,7 @@ import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, Break
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance, calculateMAFull } from '../utils/calcMA';
+import { analyzeBBExpansion } from '../utils/calcBB';
 import { analyzeBreakoutPending, type BreakoutPending } from '../utils/breakoutPending';
 import { getDisplayPe } from '../utils/formatPe';
 import { calculateKD, getKDTrend } from '../utils/calcKD';
@@ -231,6 +232,18 @@ export function StockGrid({
       result = result.filter((s) => {
         const bh = s.big_holder;
         return bh != null && bh.count_change_pct != null && bh.count_change_pct > 0;
+      });
+    }
+
+    // 布林通道剛打開 — BB squeeze → expansion. Volatility breakout signal.
+    //   squeeze-low within last 15 bars, today BBW >= 1.3x that low, and
+    //   currently rising (BBW today > BBW 3 bars back).
+    if (sf.bbExpansion) {
+      result = result.filter((s) => {
+        if (s.klines.length < 30) return false;
+        const closes = s.klines.map((k) => k.close);
+        const r = analyzeBBExpansion(closes);
+        return r !== null && r.triggered;
       });
     }
 

@@ -142,6 +142,7 @@ export interface SpecialFilters {
   pullbackReclaim10: boolean;  // last 5d pulled back to / below MA10, today close > MA10
   pullbackReclaim20: boolean;  // last 5d pulled back to / below MA20, today close > MA20
   bigHolderIncrease: boolean;  // TDCC 千張大戶 count_change_pct > 0 week-over-week
+  bbExpansion: boolean;        // 布林通道剛打開: squeeze-low 在最近 15 日內, 現 BBW ≥ squeeze × 1.3 且正在擴張
 }
 
 export interface RangeFilter {

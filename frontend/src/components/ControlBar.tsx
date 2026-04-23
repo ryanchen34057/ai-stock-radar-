@@ -518,6 +518,11 @@ export function ControlBar() {
           >
           千張大戶增加 ↗
         </FilterPill>
+        <FilterPill active={specialFilters.bbExpansion} onClick={() => toggleSF('bbExpansion')}
+          activeClass="bg-purple-500/25 text-purple-300 border-purple-500/50"
+          >
+          布林通道剛打開
+        </FilterPill>
       </div>
 
       {/* ── Row 3b: price & PE range filters ── */}

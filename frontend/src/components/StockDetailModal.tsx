@@ -40,20 +40,17 @@ interface Props {
 export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
   const chartRef = useRef<HTMLDivElement>(null);
   const darkMode = useDashboardStore((s) => s.darkMode);
-  const showBollinger = useDashboardStore((s) => s.showBollinger);
-  const toggleBollinger = useDashboardStore((s) => s.toggleBollinger);
+  const bbVisible = useDashboardStore((s) => s.bbVisible);
+  const toggleBBVisible = useDashboardStore((s) => s.toggleBBVisible);
+  const maVisible = useDashboardStore((s) => s.maVisible);
+  const toggleMAVisible = useDashboardStore((s) => s.toggleMAVisible);
+  const setAllMAVisible = useDashboardStore((s) => s.setAllMAVisible);
+  const showAnyBB = bbVisible.upper || bbVisible.middle || bbVisible.lower;
 
   const [fullKlines, setFullKlines] = useState<KLine[]>([]);
   const [loadingKlines, setLoadingKlines] = useState(true);
   const [rangeIndex, setRangeIndex] = useState(2); // default 1年
-  // Which MA lines to draw; default all 6 on. Users can toggle individually.
-  const [maVisible, setMaVisible] = useState<Record<MAPeriod, boolean>>({
-    5: true, 10: true, 20: true, 60: true, 120: true, 240: true,
-  });
-  const toggleMa = (p: MAPeriod) =>
-    setMaVisible((v) => ({ ...v, [p]: !v[p] }));
-  const setAllMa = (on: boolean) =>
-    setMaVisible({ 5: on, 10: on, 20: on, 60: on, 120: on, 240: on });
+  // MA / BB visibility is shared with the ControlBar via the global store.
   const anyMaOn = Object.values(maVisible).some(Boolean);
   const { data: news, loading: newsLoading } = useStockNews(stock.symbol);
   useInstitutional(); // keep the shared 1-day fetch warm for aggregates elsewhere
@@ -189,7 +186,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
     }
 
     // Bollinger Bands (20, 2) overlay — purple dashed upper/lower, solid middle
-    if (showBollinger) {
+    if (showAnyBB) {
       const bb = calculateBollingerBands(allCloses, 20, 2);
       const toData = (vals: (number | null)[]) => {
         const slice = vals.slice(offset);
@@ -212,29 +209,35 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
         priceLineColor: '#BB89FF',
         priceLineStyle: 2,             // 2 = Dashed
       };
-      const upperS = chart.addLineSeries({
-        color: '#BB89FF', lineWidth: 1, lineStyle: 2,
-        crosshairMarkerVisible: false, lastValueVisible: true,
-        title: 'BB上',
-        ...bbPriceLine,
-      });
-      upperS.setData(toData(bb.upper));
+      if (bbVisible.upper) {
+        const upperS = chart.addLineSeries({
+          color: '#BB89FF', lineWidth: 1, lineStyle: 2,
+          crosshairMarkerVisible: false, lastValueVisible: true,
+          title: 'BB上',
+          ...bbPriceLine,
+        });
+        upperS.setData(toData(bb.upper));
+      }
 
-      const lowerS = chart.addLineSeries({
-        color: '#BB89FF', lineWidth: 1, lineStyle: 2,
-        crosshairMarkerVisible: false, lastValueVisible: true,
-        title: 'BB下',
-        ...bbPriceLine,
-      });
-      lowerS.setData(toData(bb.lower));
+      if (bbVisible.lower) {
+        const lowerS = chart.addLineSeries({
+          color: '#BB89FF', lineWidth: 1, lineStyle: 2,
+          crosshairMarkerVisible: false, lastValueVisible: true,
+          title: 'BB下',
+          ...bbPriceLine,
+        });
+        lowerS.setData(toData(bb.lower));
+      }
 
-      const midS = chart.addLineSeries({
-        color: '#BB89FF', lineWidth: 1,
-        crosshairMarkerVisible: false, lastValueVisible: true,
-        title: 'BB中',
-        ...bbPriceLine,
-      });
-      midS.setData(toData(bb.middle));
+      if (bbVisible.middle) {
+        const midS = chart.addLineSeries({
+          color: '#BB89FF', lineWidth: 1,
+          crosshairMarkerVisible: false, lastValueVisible: true,
+          title: 'BB中',
+          ...bbPriceLine,
+        });
+        midS.setData(toData(bb.middle));
+      }
     }
 
     // KD (5, 3, 3) — computed over full series for accuracy, drawn on the bottom panel
@@ -275,7 +278,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
 
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [fullKlines, loadingKlines, rangeIndex, selectedMA, darkMode, showBollinger, maVisible]);
+  }, [fullKlines, loadingKlines, rangeIndex, selectedMA, darkMode, showAnyBB, bbVisible, maVisible]);
 
   // KD trend status — derived from the full kline series so it's stable
   // across range toggles.
@@ -371,7 +374,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
             {/* MA visibility toggles — click to show/hide each line */}
             <div className="flex gap-1 flex-wrap items-center">
               <button
-                onClick={() => setAllMa(!anyMaOn)}
+                onClick={() => setAllMAVisible(!anyMaOn)}
                 title={anyMaOn ? '一鍵關閉全部均線' : '一鍵顯示全部均線'}
                 className="px-2 py-0.5 text-xs font-semibold rounded border border-border-c
                            text-text-s hover:text-text-p hover:border-accent transition-colors mr-1"
@@ -384,7 +387,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
                 return (
                   <button
                     key={p}
-                    onClick={() => toggleMa(p)}
+                    onClick={() => toggleMAVisible(p)}
                     title={on ? '點擊隱藏' : '點擊顯示'}
                     className={`px-2 py-0.5 text-xs font-mono rounded border transition-all select-none ${
                       on ? 'bg-white/5' : 'bg-transparent opacity-40'
@@ -400,18 +403,28 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
                 );
               })}
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={toggleBollinger}
-                title="布林通道 (20, 2σ)"
-                className={`px-2 py-0.5 text-xs rounded border transition-colors font-semibold mr-1 ${
-                  showBollinger
-                    ? 'bg-purple-500/25 text-purple-300 border-purple-500/60'
-                    : 'text-text-s border-border-c hover:text-text-p'
-                }`}
-              >
-                BB 通道
-              </button>
+            <div className="flex items-center gap-1 flex-wrap">
+              {([
+                { k: 'upper'  as const, label: 'BB上' },
+                { k: 'middle' as const, label: 'BB中' },
+                { k: 'lower'  as const, label: 'BB下' },
+              ]).map(({ k, label }) => {
+                const on = bbVisible[k];
+                return (
+                  <button
+                    key={k}
+                    onClick={() => toggleBBVisible(k)}
+                    className={`px-2 py-0.5 text-xs font-mono rounded border transition-colors ${
+                      on
+                        ? 'bg-purple-500/25 text-purple-300 border-purple-500/60 font-semibold'
+                        : 'bg-transparent text-text-t border-border-c line-through opacity-60'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              <span className="w-px h-4 bg-border-c mx-1" />
               {RANGES.map((r, i) => (
                 <button
                   key={r.label}

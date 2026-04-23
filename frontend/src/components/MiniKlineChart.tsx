@@ -3,16 +3,26 @@ import { createChart, ColorType } from 'lightweight-charts';
 import type { KLine, MAPeriod, MAValues } from '../types/stock';
 import { calculateMAFull } from '../utils/calcMA';
 import { calculateBollingerBands } from '../utils/calcBB';
+import { useDashboardStore } from '../store/dashboardStore';
+
+const MA_COLORS: Record<number, string> = {
+  5: '#58A6FF', 10: '#BC8CFF', 20: '#FF7B72',
+  60: '#FFB020', 120: '#3FB950', 240: '#FF6EB0',
+};
 
 interface Props {
   klines: KLine[];
   selectedMA: MAPeriod;
   maValues: MAValues;
   signal: 'above' | 'below' | 'at';
+  /** Deprecated -- visibility now comes from global store. Kept for backwards-compat. */
   showBollinger?: boolean;
 }
 
-export function MiniKlineChart({ klines, selectedMA, showBollinger }: Props) {
+export function MiniKlineChart({ klines, selectedMA }: Props) {
+  const maVisible = useDashboardStore((s) => s.maVisible);
+  const bbVisible = useDashboardStore((s) => s.bbVisible);
+  const showAnyBB = bbVisible.upper || bbVisible.middle || bbVisible.lower;
   const containerRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -69,14 +79,6 @@ export function MiniKlineChart({ klines, selectedMA, showBollinger }: Props) {
       wickDownColor: '#00C851',
     });
 
-    const maSeries = chart.addLineSeries({
-      color: '#FFB020',
-      lineWidth: 1,
-      crosshairMarkerVisible: false,
-      lastValueVisible: false,
-      priceLineVisible: false,
-    });
-
     const candleData = klines.map((k) => ({
       time: k.date as unknown as import('lightweight-charts').UTCTimestamp,
       open: k.open,
@@ -86,61 +88,61 @@ export function MiniKlineChart({ klines, selectedMA, showBollinger }: Props) {
     }));
     candleSeries.setData(candleData);
 
-    // Compute full MA line
     const closes = klines.map((k) => k.close);
-    const maFull = calculateMAFull(closes, selectedMA);
-    const maData = klines
-      .map((k, i) => ({ time: k.date as unknown as import('lightweight-charts').UTCTimestamp, value: maFull[i] }))
-      .filter((d): d is { time: import('lightweight-charts').UTCTimestamp; value: number } => d.value !== null);
-    maSeries.setData(maData);
 
-    // Bollinger Bands overlay (20, 2). Three thin light-purple lines; upper
-    // and lower are dashed to distinguish them from the MA line.
-    if (showBollinger) {
+    const toLineData = (vals: (number | null)[]) =>
+      klines
+        .map((k, i) => ({
+          time: k.date as unknown as import('lightweight-charts').UTCTimestamp,
+          value: vals[i],
+        }))
+        .filter((d): d is { time: import('lightweight-charts').UTCTimestamp; value: number } =>
+          d.value !== null);
+
+    // Draw each enabled MA
+    for (const period of [5, 10, 20, 60, 120, 240] as MAPeriod[]) {
+      if (!maVisible[period]) continue;
+      const maFull = calculateMAFull(closes, period);
+      const series = chart.addLineSeries({
+        color: MA_COLORS[period],
+        lineWidth: period === selectedMA ? 2 : 1,
+        crosshairMarkerVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
+      series.setData(toLineData(maFull));
+    }
+
+    // Bollinger Bands overlay — render only the enabled lines
+    if (showAnyBB) {
       const bb = calculateBollingerBands(closes, 20, 2);
-      const toData = (vals: (number | null)[]) =>
-        klines
-          .map((k, i) => ({
-            time: k.date as unknown as import('lightweight-charts').UTCTimestamp,
-            value: vals[i],
-          }))
-          .filter((d): d is { time: import('lightweight-charts').UTCTimestamp; value: number } =>
-            d.value !== null);
-
-      const upperSeries = chart.addLineSeries({
-        color: 'rgba(187,137,255,0.85)',  // purple
-        lineWidth: 1,
-        lineStyle: 2,                      // dashed
-        crosshairMarkerVisible: false,
-        lastValueVisible: false,
-        priceLineVisible: false,
-      });
-      upperSeries.setData(toData(bb.upper));
-
-      const lowerSeries = chart.addLineSeries({
-        color: 'rgba(187,137,255,0.85)',
-        lineWidth: 1,
-        lineStyle: 2,
-        crosshairMarkerVisible: false,
-        lastValueVisible: false,
-        priceLineVisible: false,
-      });
-      lowerSeries.setData(toData(bb.lower));
-
-      const midSeries = chart.addLineSeries({
-        color: 'rgba(187,137,255,0.5)',
-        lineWidth: 1,
-        crosshairMarkerVisible: false,
-        lastValueVisible: false,
-        priceLineVisible: false,
-      });
-      midSeries.setData(toData(bb.middle));
+      if (bbVisible.upper) {
+        const up = chart.addLineSeries({
+          color: 'rgba(187,137,255,0.85)', lineWidth: 1, lineStyle: 2,
+          crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
+        });
+        up.setData(toLineData(bb.upper));
+      }
+      if (bbVisible.lower) {
+        const lo = chart.addLineSeries({
+          color: 'rgba(187,137,255,0.85)', lineWidth: 1, lineStyle: 2,
+          crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
+        });
+        lo.setData(toLineData(bb.lower));
+      }
+      if (bbVisible.middle) {
+        const mid = chart.addLineSeries({
+          color: 'rgba(187,137,255,0.5)', lineWidth: 1,
+          crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
+        });
+        mid.setData(toLineData(bb.middle));
+      }
     }
 
     chart.timeScale().fitContent();
 
     return () => chart.remove();
-  }, [isVisible, klines, selectedMA, showBollinger]);
+  }, [isVisible, klines, selectedMA, maVisible, bbVisible, showAnyBB]);
 
   return <div ref={containerRef} className="w-full" style={{ height: 88 }} />;
 }

@@ -27,7 +27,13 @@ interface DashboardState {
   selectedLayers: number[];
   sortBy: SortBy;
   darkMode: boolean;
-  showBollinger: boolean;   // overlay Bollinger Bands (20,2) on every card's mini chart
+  // Which MA lines are visible on ALL charts (cards + detail modal). Multi-
+  // select. Default: all on. `selectedMA` is still used as the "primary" MA
+  // for things like MA-proximity / alignment filters.
+  maVisible: Record<number, boolean>;
+  // Which Bollinger Band lines are visible on ALL charts. If all three are
+  // off, BB overlay is hidden entirely. Default all on.
+  bbVisible: { upper: boolean; middle: boolean; lower: boolean };
   selectedStock: StockData | null;
 
   // Actions
@@ -52,7 +58,9 @@ interface DashboardState {
   clearLayers: () => void;
   setSortBy: (sort: SortBy) => void;
   toggleDarkMode: () => void;
-  toggleBollinger: () => void;
+  toggleMAVisible: (p: MAPeriod) => void;
+  setAllMAVisible: (on: boolean) => void;
+  toggleBBVisible: (k: 'upper' | 'middle' | 'lower') => void;
   setSelectedStock: (stock: StockData | null) => void;
 }
 
@@ -112,7 +120,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectedLayers: [],
   sortBy: 'change_percent',
   darkMode: true,
-  showBollinger: false,
+  maVisible: { 5: true, 10: true, 20: true, 60: true, 120: true, 240: true },
+  bbVisible: { upper: true, middle: true, lower: true },
   selectedStock: null,
 
   setStocks: (stocks, lastUpdated) =>
@@ -141,7 +150,11 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     })),
   clearLayers: () => set({ selectedLayers: [] }),
   setSortBy: (sortBy) => set({ sortBy }),
-  toggleBollinger: () => set((s) => ({ showBollinger: !s.showBollinger })),
+  toggleMAVisible: (p) => set((s) => ({ maVisible: { ...s.maVisible, [p]: !s.maVisible[p] } })),
+  setAllMAVisible: (on) => set({
+    maVisible: { 5: on, 10: on, 20: on, 60: on, 120: on, 240: on },
+  }),
+  toggleBBVisible: (k) => set((s) => ({ bbVisible: { ...s.bbVisible, [k]: !s.bbVisible[k] } })),
   toggleDarkMode: () =>
     set((s) => {
       const next = !s.darkMode;

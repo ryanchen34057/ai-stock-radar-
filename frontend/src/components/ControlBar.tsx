@@ -100,8 +100,11 @@ export function ControlBar() {
   } = useDashboardStore();
   const stocks = useDashboardStore((s) => s.stocks);
   const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
-  const showBollinger = useDashboardStore((s) => s.showBollinger);
-  const toggleBollinger = useDashboardStore((s) => s.toggleBollinger);
+  const maVisible = useDashboardStore((s) => s.maVisible);
+  const toggleMAVisible = useDashboardStore((s) => s.toggleMAVisible);
+  const setAllMAVisible = useDashboardStore((s) => s.setAllMAVisible);
+  const bbVisible = useDashboardStore((s) => s.bbVisible);
+  const toggleBBVisible = useDashboardStore((s) => s.toggleBBVisible);
   const bbUpperCrossFilter = useDashboardStore((s) => s.bbUpperCrossFilter);
   const setBBUpperCrossFilter = useDashboardStore((s) => s.setBBUpperCrossFilter);
   const bbProximityFilter = useDashboardStore((s) => s.bbProximityFilter);
@@ -296,32 +299,65 @@ export function ControlBar() {
         </button>
 
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           <span className="text-sm font-semibold text-white mr-1">均線:</span>
-          {MA_OPTIONS.map((ma) => (
-            <button
-              key={ma}
-              onClick={() => setSelectedMA(ma)}
-              className={`px-2 py-1 text-xs rounded font-mono transition-colors ${
-                selectedMA === ma
-                  ? 'bg-tw-at text-black font-bold'
-                  : 'bg-card-bg text-text-s hover:text-text-p border border-border-c'
-              }`}
-            >
-              {ma}日
-            </button>
-          ))}
+          {MA_OPTIONS.map((ma) => {
+            const visible = maVisible[ma];
+            const primary = selectedMA === ma;
+            // Click: toggle visibility. Shift-click: set as primary for filters.
+            const onClick = (e: React.MouseEvent) => {
+              if (e.shiftKey) setSelectedMA(ma);
+              else toggleMAVisible(ma);
+            };
+            return (
+              <button
+                key={ma}
+                onClick={onClick}
+                title={`點擊切換顯示／隱藏，Shift+點擊 設為主要均線${primary ? '（目前主要）' : ''}`}
+                className={`px-2 py-1 text-xs rounded font-mono transition-colors border ${
+                  visible
+                    ? primary
+                      ? 'bg-tw-at text-black font-bold border-tw-at'
+                      : 'bg-tw-at/20 text-tw-at border-tw-at/40'
+                    : 'bg-card-bg text-text-t border-border-c line-through opacity-60'
+                }`}
+              >
+                {primary && '★ '}{ma}日
+              </button>
+            );
+          })}
           <button
-            onClick={toggleBollinger}
-            title="在每張小卡 K 線上疊加布林通道 (20, 2σ)"
-            className={`ml-2 px-2.5 py-1 text-xs rounded font-semibold transition-colors border ${
-              showBollinger
-                ? 'bg-purple-500/25 text-purple-300 border-purple-500/60'
-                : 'bg-card-bg text-text-s border-border-c hover:text-text-p'
-            }`}
+            onClick={() => {
+              const anyOn = MA_OPTIONS.some((m) => maVisible[m]);
+              setAllMAVisible(!anyOn);
+            }}
+            className="ml-1 px-2 py-1 text-[11px] rounded border border-border-c
+                       text-text-s hover:text-text-p hover:border-accent transition-colors"
           >
-            BB 通道
+            {MA_OPTIONS.some((m) => maVisible[m]) ? '全關' : '全開'}
           </button>
+
+          <span className="text-sm font-semibold text-white ml-3 mr-1">BB:</span>
+          {([
+            { k: 'upper' as const,  label: 'BB上' },
+            { k: 'middle' as const, label: 'BB中' },
+            { k: 'lower' as const,  label: 'BB下' },
+          ]).map(({ k, label }) => {
+            const on = bbVisible[k];
+            return (
+              <button
+                key={k}
+                onClick={() => toggleBBVisible(k)}
+                className={`px-2 py-1 text-xs rounded font-mono transition-colors border ${
+                  on
+                    ? 'bg-purple-500/25 text-purple-300 border-purple-500/60 font-semibold'
+                    : 'bg-card-bg text-text-t border-border-c line-through opacity-60'
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-1">

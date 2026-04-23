@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance, calculateMAFull } from '../utils/calcMA';
 import { analyzeBBExpansion, analyzeBBUpperCross, analyzeBBSqueeze, calculateBollingerBands } from '../utils/calcBB';
 import { analyzeBreakoutPending, type BreakoutPending } from '../utils/breakoutPending';
+import { analyzeBowlPattern } from '../utils/bowlPattern';
 import { getDisplayPe } from '../utils/formatPe';
 import { calculateKD, getKDTrend } from '../utils/calcKD';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -19,6 +20,7 @@ interface Props {
   bbUpperCrossFilter: BBUpperCrossFilter;
   bbProximityFilter: BBProximityFilter;
   bbSqueezeFilter: BBSqueezeFilter;
+  bowlPatternFilter: BowlPatternFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -32,7 +34,7 @@ interface Props {
 }
 
 export function StockGrid({
-  stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter,
+  stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter,
   specialFilters, instiFilters, priceFilter, peFilter, kdFilters,
   themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
@@ -238,6 +240,26 @@ export function StockGrid({
       });
     }
 
+    // 長紅 — 今日收盤為長紅 K 棒:
+    //   1. close > open (紅 K)
+    //   2. 漲幅 > 4% vs 昨日收盤
+    //   3. 實體 (|close - open|) > 2/3 當日全長 (high - low)
+    if (sf.longBullish) {
+      result = result.filter((s) => {
+        const k = s.klines;
+        if (k.length < 2) return false;
+        const t = k[k.length - 1];
+        const y = k[k.length - 2];
+        if (t.close <= t.open) return false;
+        const range = t.high - t.low;
+        if (range <= 0) return false;
+        const body = t.close - t.open;
+        if (body <= (2 / 3) * range) return false;
+        const changePct = y.close > 0 ? ((t.close - y.close) / y.close) * 100 : 0;
+        return changePct > 4;
+      });
+    }
+
     // 布林通道剛打開 — BB squeeze → expansion. Volatility breakout signal.
     //   squeeze-low within last 15 bars, today BBW >= 1.3x that low, and
     //   currently rising (BBW today > BBW 3 bars back).
@@ -293,6 +315,17 @@ export function StockGrid({
       });
     }
 
+    // 碗型態 — William O'Neil cup / rounded-bottom. Rim high in the first
+    // 40% of window, rounded bottom in the middle, recovery toward rim now.
+    if (bowlPatternFilter.enabled) {
+      result = result.filter((s) => {
+        if (s.klines.length < 90) return false;
+        const closes = s.klines.map((k) => k.close);
+        const r = analyzeBowlPattern(closes, bowlPatternFilter.strictness);
+        return r !== null && r.triggered;
+      });
+    }
+
     // BB squeeze — current BBW percentile over last 120 bars
     //   mild ≤ 40p, moderate ≤ 25p, extreme ≤ 10p
     if (bbSqueezeFilter.enabled) {
@@ -338,7 +371,7 @@ export function StockGrid({
           return 0;
       }
     });
-  }, [stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
+  }, [stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
 
   // Pre-compute breakout analyses so cards don't re-run the logic twice.
   const breakoutBySymbol = useMemo<Map<string, BreakoutPending>>(() => {

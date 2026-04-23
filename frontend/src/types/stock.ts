@@ -177,6 +177,18 @@ export interface BBSqueezeFilter {
   level: BBSqueezeLevel;
 }
 
+/**
+ * "碗型態" filter — classic William O'Neil cup/rounded-bottom pattern.
+ *   loose    — 寬鬆：drawdown ≥ 10%、回升 ≥ 60%、鍋底 ≥ 4 bar
+ *   moderate — 中度：drawdown ≥ 15%、回升 ≥ 75%、鍋底 ≥ 6 bar
+ *   strict   — 嚴格：drawdown ≥ 20%、回升 ≥ 85%、鍋底 ≥ 10 bar
+ */
+export type BowlStrictness = 'loose' | 'moderate' | 'strict';
+export interface BowlPatternFilter {
+  enabled: boolean;
+  strictness: BowlStrictness;
+}
+
 export interface SpecialFilters {
   maBullishAlignment: boolean; // MA5 > MA10 > MA20 > MA60
   price20DayHigh: boolean;     // today close = 20-day high
@@ -191,6 +203,7 @@ export interface SpecialFilters {
   pullbackReclaim20: boolean;  // last 5d pulled back to / below MA20, today close > MA20
   bigHolderIncrease: boolean;  // TDCC 千張大戶 count_change_pct > 0 week-over-week
   bbExpansion: boolean;        // 布林通道剛打開: squeeze-low 在最近 15 日內, 現 BBW ≥ squeeze × 1.3 且正在擴張
+  longBullish: boolean;        // 長紅: close>open, 漲幅>4%, 實體 > 2/3 當日 K 棒
 }
 
 export interface RangeFilter {

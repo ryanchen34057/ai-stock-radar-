@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 
 interface DashboardState {
   // Data
@@ -17,6 +17,7 @@ interface DashboardState {
   bbUpperCrossFilter: BBUpperCrossFilter;
   bbProximityFilter: BBProximityFilter;
   bbSqueezeFilter: BBSqueezeFilter;
+  bowlPatternFilter: BowlPatternFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -48,6 +49,7 @@ interface DashboardState {
   setBBUpperCrossFilter: (f: BBUpperCrossFilter) => void;
   setBBProximityFilter: (f: BBProximityFilter) => void;
   setBBSqueezeFilter: (f: BBSqueezeFilter) => void;
+  setBowlPatternFilter: (f: BowlPatternFilter) => void;
   setSpecialFilters: (f: SpecialFilters) => void;
   setInstiFilters: (f: InstiFilters) => void;
   setPriceFilter: (f: RangeFilter) => void;
@@ -80,6 +82,7 @@ const DEFAULT_SPECIAL: SpecialFilters = {
   pullbackReclaim20: false,
   bigHolderIncrease: false,
   bbExpansion:       false,
+  longBullish:       false,
 };
 
 const DEFAULT_INSTI: InstiFilters = {
@@ -112,6 +115,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   bbUpperCrossFilter: { enabled: false, withinDays: 3, requireStillAbove: false },
   bbProximityFilter: { enabled: false, band: 'upper', direction: 'at', threshold: 2 },
   bbSqueezeFilter: { enabled: false, level: 'moderate' },
+  bowlPatternFilter: { enabled: false, strictness: 'moderate' },
   specialFilters: DEFAULT_SPECIAL,
   instiFilters: DEFAULT_INSTI,
   priceFilter: { enabled: false, min: null, max: null },
@@ -138,6 +142,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setBBUpperCrossFilter: (bbUpperCrossFilter) => set({ bbUpperCrossFilter }),
   setBBProximityFilter: (bbProximityFilter) => set({ bbProximityFilter }),
   setBBSqueezeFilter: (bbSqueezeFilter) => set({ bbSqueezeFilter }),
+  setBowlPatternFilter: (bowlPatternFilter) => set({ bowlPatternFilter }),
   setSpecialFilters: (specialFilters) => set({ specialFilters }),
   setInstiFilters: (instiFilters) => set({ instiFilters }),
   setPriceFilter: (priceFilter) => set({ priceFilter }),

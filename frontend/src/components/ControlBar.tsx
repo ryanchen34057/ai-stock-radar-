@@ -111,6 +111,8 @@ export function ControlBar() {
   const setBBProximityFilter = useDashboardStore((s) => s.setBBProximityFilter);
   const bbSqueezeFilter = useDashboardStore((s) => s.bbSqueezeFilter);
   const setBBSqueezeFilter = useDashboardStore((s) => s.setBBSqueezeFilter);
+  const bowlPatternFilter = useDashboardStore((s) => s.bowlPatternFilter);
+  const setBowlPatternFilter = useDashboardStore((s) => s.setBowlPatternFilter);
   const { refresh } = useStockData();
 
   // ── Search autocomplete ──
@@ -622,6 +624,48 @@ export function ControlBar() {
             ▸ W / U / 咖啡杯 / 平底基底，現價距 {breakoutPendingFilter.lookback}日高 ≤ {breakoutPendingFilter.threshold}%
           </span>
         )}
+
+        {/* 碗型態 (Cup / Rounded-bottom) */}
+        <div className="flex items-center gap-1 pl-3 ml-2 border-l border-border-c">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={bowlPatternFilter.enabled}
+              onChange={(e) => setBowlPatternFilter({ ...bowlPatternFilter, enabled: e.target.checked })}
+              className="accent-amber-400 w-3.5 h-3.5"
+            />
+            <span className="text-sm font-semibold text-white">碗型態</span>
+          </label>
+          {(['loose', 'moderate', 'strict'] as const).map((lv) => {
+            const active = bowlPatternFilter.enabled && bowlPatternFilter.strictness === lv;
+            const label = lv === 'loose' ? '寬鬆' : lv === 'moderate' ? '中度' : '嚴格';
+            const title =
+              lv === 'loose'
+                ? '回檔≥10%、回升≥60%、鍋底≥4 bar (容易觸發)'
+                : lv === 'moderate'
+                ? '回檔≥15%、回升≥75%、鍋底≥6 bar'
+                : '回檔≥20%、回升≥85%、鍋底≥10 bar (經典咖啡杯)';
+            return (
+              <button
+                key={lv}
+                onClick={() => setBowlPatternFilter({ ...bowlPatternFilter, enabled: true, strictness: lv })}
+                className={`px-2 py-1 text-xs rounded transition-colors border ${
+                  active
+                    ? 'bg-amber-500/25 text-amber-300 border-amber-400/60 font-semibold'
+                    : 'bg-card-bg text-text-s border-border-c hover:text-text-p'
+                }`}
+                title={title}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {bowlPatternFilter.enabled && (
+            <span className="text-xs text-amber-300 font-mono">
+              ▸ 左沿高點 → 圓弧底 → 回測右沿
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── Row 3: special condition filters ── */}
@@ -646,6 +690,10 @@ export function ControlBar() {
         <FilterPill active={specialFilters.allTimeHigh} onClick={() => toggleSF('allTimeHigh')}
           activeClass="bg-yellow-500/20 text-yellow-400 border-yellow-500/50">
           收盤創歷史新高 ATH
+        </FilterPill>
+        <FilterPill active={specialFilters.longBullish} onClick={() => toggleSF('longBullish')}
+          activeClass="bg-tw-down/25 text-tw-down border-tw-down/60">
+          長紅 K (漲&gt;4%·實體&gt;⅔)
         </FilterPill>
         <FilterPill active={specialFilters.gapUp} onClick={() => toggleSF('gapUp')}
           activeClass="bg-tw-down/20 text-tw-down border-tw-down/50">

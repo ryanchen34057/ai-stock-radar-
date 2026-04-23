@@ -35,32 +35,28 @@ if not exist ".git" (
 )
 
 :: ---- Remind to close the running app ----
-echo   IMPORTANT: close the running app before updating!
+echo   IMPORTANT: close the running app before updating
 echo     - Close the "AI Stock Radar - Backend" window if open
 echo.
 pause
 
-:: ---- Resolve Python + Node command paths ----
+:: ---- Resolve Python command ----
+:: CMD's `if errorlevel` inside parentheses is parse-time, not runtime, so we
+:: use `&&` chains on single lines to evaluate the errorlevel correctly.
 set "PY_CMD="
-py -3.12 --version 1>/dev/null 2>&1
-if not errorlevel 1 set "PY_CMD=py -3.12"
-if not defined PY_CMD (
-    where python3.12 1>/dev/null 2>&1
-    if not errorlevel 1 set "PY_CMD=python3.12"
-)
-if not defined PY_CMD (
-    where python 1>/dev/null 2>&1
-    if not errorlevel 1 set "PY_CMD=python"
-)
+py --version 1>/dev/null 2>&1 && set "PY_CMD=py"
+if not defined PY_CMD python --version 1>/dev/null 2>&1 && set "PY_CMD=python"
+if not defined PY_CMD python3 --version 1>/dev/null 2>&1 && set "PY_CMD=python3"
 if not defined PY_CMD (
     echo   [FAIL] Python not found. Re-run setup.bat first.
     pause
     exit /b 1
 )
+echo   Using Python: %PY_CMD%
 
+:: ---- Resolve Node.js ----
 set "NODE_DIR="
-where node 1>/dev/null 2>&1
-if not errorlevel 1 (
+where node 1>/dev/null 2>&1 && (
     for /f "delims=" %%p in ('where node') do (
         if not defined NODE_DIR for %%d in ("%%~dpp") do set "NODE_DIR=%%~fd"
     )
@@ -102,9 +98,7 @@ git pull --ff-only origin master
 if errorlevel 1 (
     echo.
     echo   [FAIL] git pull failed.
-    if "%STASHED%"=="1" (
-        echo   Your stashed changes are safe. Restore with: git stash pop
-    )
+    if "%STASHED%"=="1" echo   Your stashed changes are safe. Restore with: git stash pop
     pause
     exit /b 1
 )
@@ -112,9 +106,7 @@ if errorlevel 1 (
 if "%STASHED%"=="1" (
     echo   Re-applying your stashed local edits...
     git stash pop
-    if errorlevel 1 (
-        echo   [WARN] Stash pop had conflicts. Resolve manually with: git status
-    )
+    if errorlevel 1 echo   [WARN] Stash pop had conflicts. Resolve manually with: git status
 )
 
 :: ---- Step 2: detect changes + reinstall if needed ----
@@ -132,6 +124,7 @@ if "%OLD_REQ%"=="%NEW_REQ%" (
     cd backend
     %PY_CMD% -m pip install --upgrade -r requirements.txt
     if errorlevel 1 (
+        cd ..
         echo   [FAIL] pip install failed
         pause
         exit /b 1
@@ -163,6 +156,7 @@ if "%OLD_PKG%"=="%NEW_PKG%" (
     cd frontend
     call npm install
     if errorlevel 1 (
+        cd ..
         echo   [FAIL] npm install failed
         pause
         exit /b 1
@@ -176,6 +170,7 @@ echo [4/4] Rebuilding frontend...
 cd frontend
 call npm run build
 if errorlevel 1 (
+    cd ..
     echo   [FAIL] Frontend build failed
     pause
     exit /b 1

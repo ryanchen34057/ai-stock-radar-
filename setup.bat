@@ -25,22 +25,16 @@ cd /d "%~dp0"
 echo.
 echo [1/5] Checking Python...
 
-:: Prefer py -3.12 launcher, fallback to python3.12 in PATH, fallback to any python 3.11+
+:: Robust Python detection. `if errorlevel` inside parentheses is parse-time
+:: in CMD (not runtime), so we use `&&` chains on single lines.
 set "PY_CMD="
-py -3.12 --version 1>nul 2>&1
-if not errorlevel 1 set "PY_CMD=py -3.12"
-if not defined PY_CMD (
-    where python3.12 1>nul 2>&1
-    if not errorlevel 1 set "PY_CMD=python3.12"
-)
-if not defined PY_CMD (
-    where python 1>nul 2>&1
-    if not errorlevel 1 set "PY_CMD=python"
-)
+py --version 1>nul 2>&1 && set "PY_CMD=py"
+if not defined PY_CMD python --version 1>nul 2>&1 && set "PY_CMD=python"
+if not defined PY_CMD python3 --version 1>nul 2>&1 && set "PY_CMD=python3"
 
 if not defined PY_CMD (
     echo   [FAIL] No Python found on this system.
-    echo     Install Python 3.12: https://www.python.org/downloads/release/python-3127/
+    echo     Install Python 3.11 or 3.12: https://www.python.org/downloads/
     echo     IMPORTANT: check "Add Python to PATH" during install.
     pause
     exit /b 1

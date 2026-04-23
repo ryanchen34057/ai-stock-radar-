@@ -38,18 +38,12 @@ if not exist "%~dp0frontend\dist\index.html" (
     cd ..
 )
 
-:: Pick a Python runner -- same fallback order as setup.bat
+:: Pick a Python runner. Using `&&` chains because CMD's `if errorlevel`
+:: inside parentheses is parse-time, not runtime.
 set "PY_CMD="
-py -3.12 --version 1>nul 2>&1
-if not errorlevel 1 set "PY_CMD=py -3.12"
-if not defined PY_CMD (
-    where python3.12 1>nul 2>&1
-    if not errorlevel 1 set "PY_CMD=python3.12"
-)
-if not defined PY_CMD (
-    where python 1>nul 2>&1
-    if not errorlevel 1 set "PY_CMD=python"
-)
+py --version 1>nul 2>&1 && set "PY_CMD=py"
+if not defined PY_CMD python --version 1>nul 2>&1 && set "PY_CMD=python"
+if not defined PY_CMD python3 --version 1>nul 2>&1 && set "PY_CMD=python3"
 if not defined PY_CMD (
     echo   [FAIL] No Python found. Run setup.bat first.
     pause

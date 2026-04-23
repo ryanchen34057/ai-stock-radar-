@@ -9,6 +9,7 @@ interface Indicator {
   weight: number;
   source: string;
   note: string;
+  scoring?: 'absolute' | 'percentile';
 }
 
 interface CycleSnapshot {
@@ -17,6 +18,7 @@ interface CycleSnapshot {
   weighted_avg?: number;
   indicators_used?: number;
   indicators_total?: number;
+  has_percentile_calibration?: boolean;
   label?: string;
   key?: string;
   color?: string;
@@ -128,19 +130,27 @@ export function BusinessCycle() {
       {/* Expanded detail */}
       {expanded && (
         <div className="border-t border-border-c px-4 py-3">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs text-text-s">
-              加權總分 <span className="font-mono font-bold text-text-p">{data.total_score?.toFixed(1)}</span>
-              <span className="text-text-t"> / 50</span>
-              <span className="text-text-t ml-2">({used}/{total} 指標可用)</span>
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div className="text-xs text-text-s flex items-center gap-2">
+              <span>加權總分 <span className="font-mono font-bold text-text-p">{data.total_score?.toFixed(1)}</span>
+                <span className="text-text-t"> / 50</span></span>
+              <span className="text-text-t">({used}/{total} 指標可用)</span>
+              {data.has_percentile_calibration && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] bg-accent/15 text-accent border border-accent/30">
+                  ✓ 10 年分位數校準
+                </span>
+              )}
             </div>
-            <button
-              onClick={doRefresh}
-              disabled={refreshing}
-              className="text-xs text-accent hover:underline disabled:opacity-50"
-            >
-              {refreshing ? '重算中...' : '↻ 強制重算'}
-            </button>
+            <div className="flex items-center gap-2">
+              <PmiSetter onUpdated={() => load(true)} />
+              <button
+                onClick={doRefresh}
+                disabled={refreshing}
+                className="text-xs text-accent hover:underline disabled:opacity-50"
+              >
+                {refreshing ? '重算中...' : '↻ 強制重算'}
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -152,11 +162,17 @@ export function BusinessCycle() {
                 }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-text-p">{i.name}</span>
                     <span className="text-[10px] text-text-t">
                       權重 {(i.weight * 100).toFixed(0)}%
                     </span>
+                    {i.scoring === 'percentile' && (
+                      <span className="text-[10px] px-1 rounded bg-accent/15 text-accent"
+                            title="依 10 年歷史 P20/P40/P60/P80 評分">
+                        分位數
+                      </span>
+                    )}
                   </div>
                   {i.score !== null ? (
                     <span className={`text-lg font-bold font-mono ${scoreColor(i.score)}`}>
@@ -219,6 +235,90 @@ export function BusinessCycle() {
             </div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function PmiSetter({ onUpdated }: { onUpdated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState('');
+  const [month, setMonth] = useState('');
+  const [current, setCurrent] = useState<{ value: number | null; month: string | null } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    fetch('/api/business-cycle/pmi').then(r => r.json()).then((d) => {
+      setCurrent(d);
+      if (d?.value != null) setValue(String(d.value));
+      if (d?.month) setMonth(d.month);
+      else {
+        const now = new Date();
+        setMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+      }
+    });
+  }, [open]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = parseFloat(value);
+    if (!Number.isFinite(v) || v < 0 || v > 100) return;
+    setSaving(true);
+    try {
+      await fetch('/api/business-cycle/pmi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: v, month }),
+      });
+      setOpen(false);
+      onUpdated();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="text-xs text-text-s hover:text-accent"
+        title={current?.value != null ? `目前 PMI: ${current.value} (${current.month})` : '設定 PMI'}
+      >
+        ⚙ PMI
+      </button>
+      {open && (
+        <form
+          onSubmit={submit}
+          className="absolute right-0 top-6 z-30 bg-card-bg border border-border-c rounded-lg p-3 shadow-lg w-64 space-y-2"
+        >
+          <div className="text-xs text-text-s">
+            中經院每月 1 日發布<br />
+            目前: {current?.value ?? '—'} {current?.month ? `(${current.month})` : ''}
+          </div>
+          <input
+            type="number" step="0.1" min="0" max="100"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="55.2"
+            className="w-full bg-dash-bg border border-border-c rounded px-2 py-1 text-xs font-mono text-text-p focus:outline-none focus:border-accent"
+          />
+          <input
+            type="text"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            placeholder="2026-04"
+            className="w-full bg-dash-bg border border-border-c rounded px-2 py-1 text-xs font-mono text-text-p focus:outline-none focus:border-accent"
+          />
+          <div className="flex gap-2 justify-end">
+            <button type="button" onClick={() => setOpen(false)}
+                    className="text-[11px] text-text-s hover:text-accent px-2 py-1">取消</button>
+            <button type="submit" disabled={saving}
+                    className="text-[11px] bg-accent text-white rounded px-3 py-1 disabled:opacity-50">
+              {saving ? '儲存中...' : '儲存'}
+            </button>
+          </div>
+        </form>
       )}
     </div>
   );

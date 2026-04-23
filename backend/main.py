@@ -22,7 +22,7 @@ from app.services.disposal_service import ensure_disposal_current, refresh_dispo
 from app.services.institutional_service import backfill_institutional_history
 from app.services import setup_progress
 from app.services.shareholding_service import refresh_shareholding_weekly
-from app.services.business_cycle_service import refresh_business_cycle
+from app.services.business_cycle_service import refresh_business_cycle, refresh_percentiles
 from app.services import fb_service, kol_service, twse_mis_service
 
 logging.basicConfig(
@@ -166,6 +166,37 @@ async def lifespan(app: FastAPI):
     )
     # Run once at startup so the widget has data immediately
     threading.Thread(target=_biz_cycle_job, daemon=True).start()
+
+    # Historical percentile calibration -- weekly (Sunday 02:00) and also
+    # once at startup if DB is empty, so scoring immediately uses 10y-based
+    # thresholds instead of hard-coded buckets.
+    scheduler.add_job(
+        lambda: refresh_percentiles(),
+        CronTrigger(day_of_week="sun", hour=2, minute=0, timezone="Asia/Taipei"),
+        id="weekly_business_cycle_percentiles",
+        replace_existing=True,
+    )
+
+    def _percentile_startup_bootstrap():
+        try:
+            c = get_connection()
+            try:
+                row = c.execute("SELECT COUNT(*) as n FROM business_cycle_percentiles").fetchone()
+                if row and row["n"] > 0:
+                    return   # already have calibration, skip
+            finally:
+                c.close()
+            logger.info("business_cycle: computing historical percentiles (one-off)...")
+            refresh_percentiles()
+            # Recompute snapshot so dashboard uses the fresh percentile-based scoring
+            c = get_connection()
+            try:
+                refresh_business_cycle(c)
+            finally:
+                c.close()
+        except Exception as e:
+            logger.error(f"percentile bootstrap failed: {e}")
+    threading.Thread(target=_percentile_startup_bootstrap, daemon=True).start()
 
     # Schedule YouTube pipeline at 18:30 Taipei time (show uploads ~18:00)
     def _yt_job():

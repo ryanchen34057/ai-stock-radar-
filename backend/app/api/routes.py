@@ -488,6 +488,49 @@ def get_business_cycle(force: bool = Query(default=False)):
         conn.close()
 
 
+class PmiPayload(BaseModel):
+    value: float          # e.g. 55.2
+    month: str            # e.g. "2026-04"
+
+
+@router.post("/business-cycle/pmi")
+def set_business_cycle_pmi(payload: PmiPayload):
+    """
+    Set the latest Taiwan manufacturing PMI (中經院 publishes ~1st of each
+    month). We don't scrape because CIER has no stable API -- this endpoint
+    lets the admin set the value from the monthly press release.
+    """
+    if payload.value < 0 or payload.value > 100:
+        raise HTTPException(status_code=400, detail="PMI should be 0-100")
+    business_cycle_service.set_pmi(payload.value, payload.month)
+    # Recompute snapshot so the new PMI value flows into the dashboard
+    conn = get_connection()
+    try:
+        business_cycle_service.refresh_business_cycle(conn)
+    finally:
+        conn.close()
+    return {"status": "ok", "pmi": business_cycle_service.get_pmi()}
+
+
+@router.get("/business-cycle/pmi")
+def get_business_cycle_pmi():
+    return business_cycle_service.get_pmi() or {"value": None, "month": None}
+
+
+@router.post("/business-cycle/refresh-percentiles")
+def refresh_business_cycle_percentiles():
+    """
+    Recompute 10y historical P20/P40/P60/P80 for every indicator. Run this
+    once at install, then weekly on Sunday night. Scoring auto-uses
+    percentiles when calibration exists.
+    """
+    try:
+        return business_cycle_service.refresh_percentiles()
+    except Exception as e:
+        logger.error(f"refresh-percentiles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/setup/progress")
 def get_setup_progress():
     """First-run / startup data-sweep progress. Frontend polls this at 1Hz."""

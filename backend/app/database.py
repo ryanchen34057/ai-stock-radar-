@@ -185,6 +185,17 @@ def init_schema():
                 fetched_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS business_cycle_percentiles (
+                indicator_key TEXT PRIMARY KEY,
+                p20           REAL NOT NULL,
+                p40           REAL NOT NULL,
+                p60           REAL NOT NULL,
+                p80           REAL NOT NULL,
+                direction     TEXT NOT NULL DEFAULT 'higher_is_better',
+                sample_count  INTEGER NOT NULL,
+                computed_at   TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS eps_annual (
                 symbol      TEXT,
                 year        INTEGER,

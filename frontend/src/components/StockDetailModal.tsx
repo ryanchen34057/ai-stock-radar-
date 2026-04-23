@@ -46,6 +46,12 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
   const [fullKlines, setFullKlines] = useState<KLine[]>([]);
   const [loadingKlines, setLoadingKlines] = useState(true);
   const [rangeIndex, setRangeIndex] = useState(2); // default 1年
+  // Which MA lines to draw; default all 6 on. Users can toggle individually.
+  const [maVisible, setMaVisible] = useState<Record<MAPeriod, boolean>>({
+    5: true, 10: true, 20: true, 60: true, 120: true, 240: true,
+  });
+  const toggleMa = (p: MAPeriod) =>
+    setMaVisible((v) => ({ ...v, [p]: !v[p] }));
   const { data: news, loading: newsLoading } = useStockNews(stock.symbol);
   useInstitutional(); // keep the shared 1-day fetch warm for aggregates elsewhere
 
@@ -158,6 +164,8 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
     const allCloses = fullKlines.map((k) => k.close);
 
     for (const period of [5, 10, 20, 60, 120, 240] as MAPeriod[]) {
+      if (!maVisible[period]) continue;  // user hid this MA line
+
       const maFull = calculateMAFull(allCloses, period);
       const maSlice = maFull.slice(offset);
       const maData = klines
@@ -251,7 +259,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
 
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [fullKlines, loadingKlines, rangeIndex, selectedMA, darkMode, showBollinger]);
+  }, [fullKlines, loadingKlines, rangeIndex, selectedMA, darkMode, showBollinger, maVisible]);
 
   // KD trend status — derived from the full kline series so it's stable
   // across range toggles.
@@ -343,15 +351,30 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
         {/* Chart */}
         <div className="p-4 border-b border-border-c">
           {/* Range selector */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex gap-1.5 flex-wrap">
-              {([5, 10, 20, 60, 120, 240] as MAPeriod[]).map((p) => (
-                stock.ma[String(p) as keyof typeof stock.ma] !== null && (
-                  <span key={p} className="text-xs font-mono" style={{ color: MA_COLORS[p] }}>
-                    MA{p}: {formatPrice(stock.ma[String(p) as keyof typeof stock.ma])}
-                  </span>
-                )
-              ))}
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            {/* MA visibility toggles — click to show/hide each line */}
+            <div className="flex gap-1 flex-wrap">
+              {([5, 10, 20, 60, 120, 240] as MAPeriod[]).map((p) => {
+                const v = stock.ma[String(p) as keyof typeof stock.ma];
+                const on = maVisible[p];
+                return (
+                  <button
+                    key={p}
+                    onClick={() => toggleMa(p)}
+                    title={on ? '點擊隱藏' : '點擊顯示'}
+                    className={`px-2 py-0.5 text-xs font-mono rounded border transition-all select-none ${
+                      on ? 'bg-white/5' : 'bg-transparent opacity-40'
+                    }`}
+                    style={{
+                      color: MA_COLORS[p],
+                      borderColor: on ? `${MA_COLORS[p]}66` : '#30363D',
+                    }}
+                  >
+                    <span className={on ? 'font-bold' : 'line-through'}>MA{p}</span>
+                    {v !== null && <span className="ml-1">{formatPrice(v)}</span>}
+                  </button>
+                );
+              })}
             </div>
             <div className="flex items-center gap-1">
               <button

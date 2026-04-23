@@ -52,6 +52,9 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
   });
   const toggleMa = (p: MAPeriod) =>
     setMaVisible((v) => ({ ...v, [p]: !v[p] }));
+  const setAllMa = (on: boolean) =>
+    setMaVisible({ 5: on, 10: on, 20: on, 60: on, 120: on, 240: on });
+  const anyMaOn = Object.values(maVisible).some(Boolean);
   const { data: news, loading: newsLoading } = useStockNews(stock.symbol);
   useInstitutional(); // keep the shared 1-day fetch warm for aggregates elsewhere
 
@@ -216,11 +219,12 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
       });
       lowerS.setData(toData(bb.lower));
 
-      // Mid line = MA20 -- faint solid line, no right-axis tag (would stack
-      // on top of MA20's tag).
+      // Mid line = MA20. Show its price tag too (user may have hidden MA20
+      // via the toggle pills, in which case BB中 is the only way to see it).
       const midS = chart.addLineSeries({
-        color: 'rgba(187,137,255,0.35)', lineWidth: 1,
-        crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
+        color: '#BB89FF', lineWidth: 1,
+        crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false,
+        title: 'BB中',
       });
       midS.setData(toData(bb.middle));
     }
@@ -357,7 +361,15 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
           {/* Range selector */}
           <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             {/* MA visibility toggles — click to show/hide each line */}
-            <div className="flex gap-1 flex-wrap">
+            <div className="flex gap-1 flex-wrap items-center">
+              <button
+                onClick={() => setAllMa(!anyMaOn)}
+                title={anyMaOn ? '一鍵關閉全部均線' : '一鍵顯示全部均線'}
+                className="px-2 py-0.5 text-xs font-semibold rounded border border-border-c
+                           text-text-s hover:text-text-p hover:border-accent transition-colors mr-1"
+              >
+                {anyMaOn ? '✕ 全關' : '✓ 全開'}
+              </button>
               {([5, 10, 20, 60, 120, 240] as MAPeriod[]).map((p) => {
                 const v = stock.ma[String(p) as keyof typeof stock.ma];
                 const on = maVisible[p];

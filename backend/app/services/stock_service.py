@@ -523,39 +523,60 @@ def ensure_klines_current(backfill_period: str = "5y"):
 
     logger.info(
         f"ensure_klines_current: {len(targets)}/{len(stocks)} stock(s) need update "
-        f"(target date {target_str})"
+        f"(target date {target_str}) — parallelised 6 workers"
     )
     from app.services import setup_progress as _prog
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
     _prog.begin("klines", total=len(targets))
-    success = 0
-    failed: list[str] = []
     end_str = (today + _td(days=1)).strftime("%Y-%m-%d")  # yfinance end is exclusive
 
-    for i, (s, last) in enumerate(targets):
+    # Progress is advanced from multiple worker threads; use a lock-free
+    # atomic counter via a list cell (Python GIL makes single-op increment
+    # effectively atomic, but a tiny lock is cheap and defensive).
+    done_counter = [0]
+    done_lock = threading.Lock()
+
+    def _fetch_one(item: tuple[dict, str | None]) -> tuple[str, bool, str]:
+        """Returns (symbol, success, message). Called from worker threads."""
+        s, last = item
         symbol = s["symbol"]
-        _prog.update(current=i + 1, symbol=symbol, name=s["name"])
         try:
             if last:
                 start_str = (_dt.strptime(last, "%Y-%m-%d").date() + _td(days=1)).strftime("%Y-%m-%d")
-                logger.info(f"  [{i+1}/{len(targets)}] {symbol} {s['name']}: incremental {start_str}..{end_str}")
                 df, info = fetch_yfinance_range(symbol, start_str, end_str)
             else:
-                logger.info(f"  [{i+1}/{len(targets)}] {symbol} {s['name']}: no data — fetching {backfill_period}")
                 df, info = fetch_yfinance(symbol, backfill_period)
 
             if df is not None and not df.empty:
                 upsert_klines(symbol, df)
-                if info:
-                    upsert_metadata(symbol, info)
-                logger.info(f"  ✓ {symbol}: +{len(df)} rows")
-                success += 1
-            else:
-                # No new data — likely holiday or delisted. Not a hard failure.
-                logger.info(f"  – {symbol}: no new rows from yfinance")
+                # Skip metadata upsert here — ensure_eps_current + FinMind run
+                # right after and both write more accurate info.
+                return (symbol, True, f"+{len(df)} rows")
+            return (symbol, False, "no new rows (holiday/delisted/already current)")
         except Exception as e:
-            logger.error(f"  ✗ {symbol}: {e}")
-            failed.append(symbol)
-        time.sleep(random.uniform(1.5, 3.0))
+            return (symbol, False, f"error: {e}")
+        finally:
+            with done_lock:
+                done_counter[0] += 1
+                _prog.update(current=done_counter[0], symbol=symbol, name=s["name"])
+
+    success = 0
+    failed: list[str] = []
+
+    # 6 workers — yfinance I/O bound. Higher concurrency risks throttling.
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        future_map = {ex.submit(_fetch_one, item): item for item in targets}
+        for fut in as_completed(future_map):
+            sym, ok, msg = fut.result()
+            if ok:
+                success += 1
+                logger.info(f"  ✓ {sym}: {msg}")
+            else:
+                # "no new rows" is common/expected; only count hard errors
+                if msg.startswith("error"):
+                    failed.append(sym)
+                logger.info(f"  – {sym}: {msg}")
 
     logger.info(f"ensure_klines_current done: {success} updated, {len(failed)} failed: {failed}")
     return {"targets": len(targets), "success": success, "failed": failed}
@@ -682,33 +703,48 @@ def ensure_eps_current():
         logger.info(f"ensure_eps_current: all {len(stocks)} stocks already have EPS >= {threshold}")
         return {"targets": 0, "success": 0, "failed": []}
 
-    logger.info(f"ensure_eps_current: {len(targets)}/{len(stocks)} stock(s) need EPS update")
+    logger.info(f"ensure_eps_current: {len(targets)}/{len(stocks)} stock(s) need EPS update — parallelised 4 workers")
     from app.services import setup_progress as _prog
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import threading
     _prog.begin("eps", total=len(targets))
-    success = 0
-    failed: list[str] = []
-    for i, s in enumerate(targets):
+
+    done_counter = [0]
+    done_lock = threading.Lock()
+
+    def _fetch_eps(s: dict) -> tuple[str, bool, str]:
         symbol = s["symbol"]
-        _prog.update(current=i + 1, symbol=symbol, name=s["name"])
-        logger.info(f"  [{i+1}/{len(targets)}] {symbol} {s['name']}")
         try:
             annual, quarterly, info = fetch_eps_for_stock(symbol)
             if annual is None and quarterly is None:
-                failed.append(symbol)
-                continue
+                return (symbol, False, "no statements")
             n_ann, n_qtr = upsert_eps(symbol, annual, quarterly)
             if info:
                 upsert_metadata(symbol, info)
             if n_ann == 0 and n_qtr == 0:
-                logger.info(f"  – {symbol}: statements returned but no EPS rows")
-                failed.append(symbol)
-            else:
-                logger.info(f"  ✓ {symbol}: {n_ann} annual + {n_qtr} quarterly EPS rows + forecast")
-                success += 1
+                return (symbol, False, "no EPS rows extracted")
+            return (symbol, True, f"{n_ann}Y + {n_qtr}Q EPS")
         except Exception as e:
-            logger.error(f"  ✗ {symbol}: {e}")
-            failed.append(symbol)
-        time.sleep(random.uniform(1.5, 3.0))
+            return (symbol, False, f"error: {e}")
+        finally:
+            with done_lock:
+                done_counter[0] += 1
+                _prog.update(current=done_counter[0], symbol=symbol, name=s["name"])
+
+    success = 0
+    failed: list[str] = []
+    # 4 workers for EPS — yfinance financials endpoint is slower + more sensitive
+    # to rate-limit than history. Keep concurrency lower than klines.
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        future_map = {ex.submit(_fetch_eps, s): s for s in targets}
+        for fut in as_completed(future_map):
+            sym, ok, msg = fut.result()
+            if ok:
+                success += 1
+                logger.info(f"  ✓ {sym}: {msg}")
+            else:
+                failed.append(sym)
+                logger.info(f"  – {sym}: {msg}")
 
     logger.info(f"ensure_eps_current done: {success} updated, {len(failed)} failed: {failed}")
     return {"targets": len(targets), "success": success, "failed": failed}

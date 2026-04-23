@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import type { StockData, KLine, MAPeriod } from '../types/stock';
 import { calculateMAFull } from '../utils/calcMA';
+import { calculateBollingerBands } from '../utils/calcBB';
 import { calculateKD, getKDTrend, kdTrendLabel } from '../utils/calcKD';
 import { formatPrice, formatChange, formatChangePct, formatVolume, formatMarketCap } from '../utils/formatters';
 import { useDashboardStore } from '../store/dashboardStore';
@@ -39,6 +40,8 @@ interface Props {
 export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
   const chartRef = useRef<HTMLDivElement>(null);
   const darkMode = useDashboardStore((s) => s.darkMode);
+  const showBollinger = useDashboardStore((s) => s.showBollinger);
+  const toggleBollinger = useDashboardStore((s) => s.toggleBollinger);
 
   const [fullKlines, setFullKlines] = useState<KLine[]>([]);
   const [loadingKlines, setLoadingKlines] = useState(true);
@@ -174,6 +177,42 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
       lineSeries.setData(maData);
     }
 
+    // Bollinger Bands (20, 2) overlay — purple dashed upper/lower, solid middle
+    if (showBollinger) {
+      const bb = calculateBollingerBands(allCloses, 20, 2);
+      const toData = (vals: (number | null)[]) => {
+        const slice = vals.slice(offset);
+        return klines
+          .map((k, i) => ({
+            time: k.date as unknown as import('lightweight-charts').UTCTimestamp,
+            value: slice[i],
+          }))
+          .filter((d): d is { time: import('lightweight-charts').UTCTimestamp; value: number } =>
+            d.value !== null);
+      };
+
+      const upperS = chart.addLineSeries({
+        color: 'rgba(187,137,255,0.85)', lineWidth: 1, lineStyle: 2,
+        crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false,
+        title: 'BB Upper',
+      });
+      upperS.setData(toData(bb.upper));
+
+      const lowerS = chart.addLineSeries({
+        color: 'rgba(187,137,255,0.85)', lineWidth: 1, lineStyle: 2,
+        crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false,
+        title: 'BB Lower',
+      });
+      lowerS.setData(toData(bb.lower));
+
+      const midS = chart.addLineSeries({
+        color: 'rgba(187,137,255,0.5)', lineWidth: 1,
+        crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false,
+        title: 'BB Mid',
+      });
+      midS.setData(toData(bb.middle));
+    }
+
     // KD (5, 3, 3) — computed over full series for accuracy, drawn on the bottom panel
     const kdFull = calculateKD(fullKlines, 5, 3, 3);
     const kSlice = kdFull.k.slice(offset);
@@ -212,7 +251,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
 
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [fullKlines, loadingKlines, rangeIndex, selectedMA, darkMode]);
+  }, [fullKlines, loadingKlines, rangeIndex, selectedMA, darkMode, showBollinger]);
 
   // KD trend status — derived from the full kline series so it's stable
   // across range toggles.
@@ -314,7 +353,18 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
                 )
               ))}
             </div>
-            <div className="flex gap-1">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleBollinger}
+                title="布林通道 (20, 2σ)"
+                className={`px-2 py-0.5 text-xs rounded border transition-colors font-semibold mr-1 ${
+                  showBollinger
+                    ? 'bg-purple-500/25 text-purple-300 border-purple-500/60'
+                    : 'text-text-s border-border-c hover:text-text-p'
+                }`}
+              >
+                BB 通道
+              </button>
               {RANGES.map((r, i) => (
                 <button
                   key={r.label}

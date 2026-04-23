@@ -113,6 +113,8 @@ export function ControlBar() {
   const setBBSqueezeFilter = useDashboardStore((s) => s.setBBSqueezeFilter);
   const bowlPatternFilter = useDashboardStore((s) => s.bowlPatternFilter);
   const setBowlPatternFilter = useDashboardStore((s) => s.setBowlPatternFilter);
+  const candleFilter = useDashboardStore((s) => s.candleFilter);
+  const setCandleFilter = useDashboardStore((s) => s.setCandleFilter);
   const { refresh } = useStockData();
 
   // ── Search autocomplete ──
@@ -666,6 +668,67 @@ export function ControlBar() {
             </span>
           )}
         </div>
+      </div>
+
+      {/* ── Row: K-line candle filter (latest trading day colour + % range) ── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={candleFilter.enabled}
+            onChange={(e) => setCandleFilter({ ...candleFilter, enabled: e.target.checked })}
+            className="accent-accent w-3.5 h-3.5"
+          />
+          <span className="text-sm font-semibold text-white">今日 K 棒</span>
+        </label>
+        {(['red', 'black'] as const).map((c) => {
+          const active = candleFilter.enabled && candleFilter.color === c;
+          const cls = active
+            ? (c === 'red' ? 'bg-tw-down text-white' : 'bg-tw-up text-white')
+            : 'bg-card-bg text-text-s border border-border-c hover:text-text-p';
+          return (
+            <button
+              key={c}
+              disabled={!candleFilter.enabled}
+              onClick={() => setCandleFilter({ ...candleFilter, color: c })}
+              className={`px-2.5 py-1 text-xs rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${cls}`}
+            >
+              {c === 'red' ? '紅 K ↑' : '黑 K ↓'}
+            </button>
+          );
+        })}
+        <span className="text-xs text-text-t">漲跌幅</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number" min={0} max={10} step={0.5}
+            value={candleFilter.minPct}
+            disabled={!candleFilter.enabled}
+            onChange={(e) => setCandleFilter({
+              ...candleFilter, minPct: Math.max(0, parseFloat(e.target.value) || 0),
+            })}
+            className="w-14 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                       text-center focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          <span className="text-xs text-text-t">% ~</span>
+          <input
+            type="number" min={0.5} max={30} step={0.5}
+            value={candleFilter.maxPct}
+            disabled={!candleFilter.enabled}
+            onChange={(e) => setCandleFilter({
+              ...candleFilter, maxPct: Math.max(0.5, parseFloat(e.target.value) || 30),
+            })}
+            className="w-14 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                       text-center focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          <span className="text-xs text-text-t">%</span>
+        </div>
+        {candleFilter.enabled && (
+          <span className={`text-xs font-mono ${candleFilter.color === 'red' ? 'text-tw-down' : 'text-tw-up'}`}>
+            ▸ 今日收 {candleFilter.color === 'red' ? '紅 K ↑' : '黑 K ↓'} 且
+            {candleFilter.color === 'red' ? ' 漲 ' : ' 跌 '}
+            {candleFilter.minPct}% ~ {candleFilter.maxPct}%
+          </span>
+        )}
       </div>
 
       {/* ── Row 3: special condition filters ── */}

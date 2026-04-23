@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, CandleFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance, calculateMAFull } from '../utils/calcMA';
@@ -21,6 +21,7 @@ interface Props {
   bbProximityFilter: BBProximityFilter;
   bbSqueezeFilter: BBSqueezeFilter;
   bowlPatternFilter: BowlPatternFilter;
+  candleFilter: CandleFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -34,7 +35,7 @@ interface Props {
 }
 
 export function StockGrid({
-  stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter,
+  stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, candleFilter,
   specialFilters, instiFilters, priceFilter, peFilter, kdFilters,
   themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
@@ -315,6 +316,28 @@ export function StockGrid({
       });
     }
 
+    // Latest trading-day candle filter: red/black K with daily change_percent
+    // in [minPct, maxPct] (abs). Red K → positive daily change, black → negative.
+    if (candleFilter.enabled) {
+      result = result.filter((s) => {
+        const k = s.klines;
+        if (k.length === 0) return false;
+        const today = k[k.length - 1];
+        const isRed = today.close > today.open;
+        const isBlack = today.close < today.open;
+        if (candleFilter.color === 'red' && !isRed) return false;
+        if (candleFilter.color === 'black' && !isBlack) return false;
+        const chg = s.change_percent;
+        if (chg === null) return false;
+        // Red: positive change in [min, max]; Black: negative in [-max, -min]
+        if (candleFilter.color === 'red'
+            && (chg < candleFilter.minPct || chg > candleFilter.maxPct)) return false;
+        if (candleFilter.color === 'black'
+            && (chg > -candleFilter.minPct || chg < -candleFilter.maxPct)) return false;
+        return true;
+      });
+    }
+
     // 碗型態 — William O'Neil cup / rounded-bottom. Rim high in the first
     // 40% of window, rounded bottom in the middle, recovery toward rim now.
     if (bowlPatternFilter.enabled) {
@@ -371,7 +394,7 @@ export function StockGrid({
           return 0;
       }
     });
-  }, [stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
+  }, [stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, candleFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
 
   // Pre-compute breakout analyses so cards don't re-run the logic twice.
   const breakoutBySymbol = useMemo<Map<string, BreakoutPending>>(() => {

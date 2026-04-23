@@ -113,6 +113,21 @@ export interface MAProximityFilter {
 }
 
 /**
+ * Latest trading-day K-line pattern filter.
+ *   color='red'   — close > open (bullish candle, 紅K)
+ *   color='black' — close < open (bearish candle, 黑K)
+ *   minPct/maxPct — absolute daily change_percent range vs previous close.
+ *     Red K uses positive range [minPct, maxPct].
+ *     Black K uses negative range [-maxPct, -minPct].
+ */
+export interface CandleFilter {
+  enabled: boolean;
+  color: 'red' | 'black';
+  minPct: number;   // 0-30
+  maxPct: number;   // 0-30
+}
+
+/**
  * "Breakout-pending" filter — find stocks that built a base after a prior
  * high and are now re-approaching that high. Catches W-bottoms, U-bottoms,
  * cup-with-handle and flat-base patterns all at once.

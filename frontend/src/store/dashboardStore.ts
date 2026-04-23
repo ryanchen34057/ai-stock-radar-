@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, CandleFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 
 interface DashboardState {
   // Data
@@ -18,6 +18,7 @@ interface DashboardState {
   bbProximityFilter: BBProximityFilter;
   bbSqueezeFilter: BBSqueezeFilter;
   bowlPatternFilter: BowlPatternFilter;
+  candleFilter: CandleFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -50,6 +51,7 @@ interface DashboardState {
   setBBProximityFilter: (f: BBProximityFilter) => void;
   setBBSqueezeFilter: (f: BBSqueezeFilter) => void;
   setBowlPatternFilter: (f: BowlPatternFilter) => void;
+  setCandleFilter: (f: CandleFilter) => void;
   setSpecialFilters: (f: SpecialFilters) => void;
   setInstiFilters: (f: InstiFilters) => void;
   setPriceFilter: (f: RangeFilter) => void;
@@ -116,6 +118,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   bbProximityFilter: { enabled: false, band: 'upper', direction: 'at', threshold: 2 },
   bbSqueezeFilter: { enabled: false, level: 'moderate' },
   bowlPatternFilter: { enabled: false, strictness: 'moderate' },
+  candleFilter: { enabled: false, color: 'red', minPct: 3, maxPct: 30 },
   specialFilters: DEFAULT_SPECIAL,
   instiFilters: DEFAULT_INSTI,
   priceFilter: { enabled: false, min: null, max: null },
@@ -143,6 +146,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setBBProximityFilter: (bbProximityFilter) => set({ bbProximityFilter }),
   setBBSqueezeFilter: (bbSqueezeFilter) => set({ bbSqueezeFilter }),
   setBowlPatternFilter: (bowlPatternFilter) => set({ bowlPatternFilter }),
+  setCandleFilter: (candleFilter) => set({ candleFilter }),
   setSpecialFilters: (specialFilters) => set({ specialFilters }),
   setInstiFilters: (instiFilters) => set({ instiFilters }),
   setPriceFilter: (priceFilter) => set({ priceFilter }),

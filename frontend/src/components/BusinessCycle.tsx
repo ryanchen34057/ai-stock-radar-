@@ -83,77 +83,36 @@ export function BusinessCycle() {
 
   return (
     <div className="mx-4 my-2 bg-card-bg border border-border-c rounded-xl overflow-hidden">
-      {/* Main row — clickable to expand */}
+      {/* Main row — clickable to expand. Centered vertical stack:
+          traffic-light LED face → big score+label → action */}
       <button
         onClick={() => setExpanded(e => !e)}
-        className="w-full flex items-center gap-4 px-4 py-3 hover:bg-card-hover transition-colors"
+        className="w-full flex flex-col items-center gap-3 px-4 py-5 hover:bg-card-hover transition-colors"
       >
-        {/* Realistic glowing light bulb */}
-        <div className="relative w-20 h-20 flex items-center justify-center flex-shrink-0">
-          {/* Outer halo — pulsing glow */}
-          <div
-            className="absolute inset-0 rounded-full bulb-halo pointer-events-none"
-            style={{
-              background: `radial-gradient(circle, ${data.color}BB 0%, ${data.color}55 35%, transparent 70%)`,
-              filter: 'blur(10px)',
-            }}
-          />
-          {/* Second halo layer (larger, slower — softens the pulse) */}
-          <div
-            className="absolute inset-[-8px] rounded-full pointer-events-none"
-            style={{
-              background: `radial-gradient(circle, ${data.color}44 0%, transparent 70%)`,
-              filter: 'blur(16px)',
-            }}
-          />
-          {/* Bulb body */}
-          <div
-            className="relative w-14 h-14 rounded-full bulb-body flex items-center justify-center"
-            style={{
-              background: `radial-gradient(circle at 32% 28%,
-                                #ffffffee 0%,
-                                ${data.color} 38%,
-                                ${data.color} 65%,
-                                rgba(0,0,0,0.25) 100%)`,
-              boxShadow: `
-                inset -4px -5px 10px rgba(0,0,0,0.35),
-                inset 3px 3px 6px rgba(255,255,255,0.35),
-                0 0 22px ${data.color}AA,
-                0 0 38px ${data.color}66
-              `,
-            }}
-          >
-            {/* Tiny highlight dot (like glass reflection) */}
-            <div
-              className="absolute top-1.5 left-2.5 w-2.5 h-2 rounded-full pointer-events-none"
-              style={{
-                background: 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, transparent 75%)',
-                filter: 'blur(0.5px)',
-              }}
-            />
-            {/* Score number */}
-            <span className="relative text-white font-bold text-lg tabular-nums drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">
-              {data.total_score?.toFixed(0)}
-            </span>
-          </div>
+        {/* Section header */}
+        <div className="text-xs text-text-t font-mono uppercase tracking-[0.3em]">
+          景氣燈號
         </div>
 
-        {/* Label + state */}
-        <div className="text-left flex-shrink-0">
-          <div className="text-[10px] text-text-t font-mono uppercase tracking-wider mb-0.5">
-            景氣燈號
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-bold" style={{ color: data.color }}>
+        {/* LED traffic-light face */}
+        <LedLight color={data.color ?? '#484F58'} score={data.total_score ?? 0} />
+
+        {/* Big label + state */}
+        <div className="flex flex-col items-center gap-1 mt-1">
+          <div className="flex items-baseline gap-3">
+            <span
+              className="text-4xl font-extrabold tracking-wide drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]"
+              style={{ color: data.color }}
+            >
               {data.label}
             </span>
-            <span className="text-sm text-text-p">{data.state}</span>
+            <span className="text-xl font-bold text-text-p">{data.state}</span>
           </div>
-          <div className="text-xs text-text-s mt-0.5">{data.action}</div>
+          <div className="text-base text-white font-medium">{data.action}</div>
         </div>
 
-        {/* Indicator chips — compact summary */}
-        <div className="flex items-center gap-1.5 flex-wrap ml-auto">
+        {/* Indicator chips — compact summary, centered */}
+        <div className="flex items-center gap-1.5 flex-wrap justify-center mt-2 max-w-3xl">
           {data.indicators?.filter(i => i.score !== null).map(i => (
             <div
               key={i.key}
@@ -166,7 +125,9 @@ export function BusinessCycle() {
           ))}
         </div>
 
-        <span className="text-text-t text-sm ml-2">{expanded ? '▾' : '▸'}</span>
+        <span className="text-text-s text-xs mt-1">
+          {expanded ? '▲ 收合' : '▼ 展開指標明細'}
+        </span>
       </button>
 
       {/* Expanded detail */}
@@ -362,6 +323,106 @@ function PmiSetter({ onUpdated }: { onUpdated: () => void }) {
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+/**
+ * Traffic-light style LED face — dark bezel + many small LED dots in concentric
+ * rings (like a real semaphore/signal head). Surrounded by a pulsing halo.
+ */
+function LedLight({ color, score }: { color: string; score: number }) {
+  const dots: { x: number; y: number }[] = [];
+  // Center LED
+  dots.push({ x: 0, y: 0 });
+  // Concentric rings — dot count scales with circumference
+  const rings = [
+    { r: 13, count: 8 },
+    { r: 24, count: 14 },
+    { r: 35, count: 20 },
+    { r: 46, count: 26 },
+    { r: 57, count: 32 },
+  ];
+  for (const { r, count } of rings) {
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      dots.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
+    }
+  }
+
+  return (
+    <div className="relative flex items-center justify-center" style={{ width: 180, height: 180 }}>
+      {/* Outer pulsing halo */}
+      <div
+        className="absolute inset-0 rounded-full bulb-halo pointer-events-none"
+        style={{
+          background: `radial-gradient(circle, ${color}AA 0%, ${color}33 45%, transparent 75%)`,
+          filter: 'blur(14px)',
+        }}
+      />
+      {/* Wider softer halo */}
+      <div
+        className="absolute rounded-full pointer-events-none"
+        style={{
+          inset: '-20px',
+          background: `radial-gradient(circle, ${color}33 0%, transparent 70%)`,
+          filter: 'blur(22px)',
+        }}
+      />
+
+      <svg viewBox="-80 -80 160 160" width="160" height="160" className="relative bulb-body">
+        <defs>
+          <radialGradient id="led-dot" cx="35%" cy="30%" r="65%">
+            <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.95" />
+            <stop offset="35%"  stopColor={color}    stopOpacity="1" />
+            <stop offset="100%" stopColor={color}    stopOpacity="0.85" />
+          </radialGradient>
+          <radialGradient id="lens-bg" cx="50%" cy="50%" r="55%">
+            <stop offset="0%"   stopColor={color}  stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#000"   stopOpacity="0.85" />
+          </radialGradient>
+          <filter id="led-blur" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="0.5" />
+          </filter>
+        </defs>
+
+        {/* Outer bezel (dark plastic frame) */}
+        <circle cx="0" cy="0" r="78" fill="#0a0a0a" />
+        <circle cx="0" cy="0" r="75" fill="#2a2a2a" />
+        <circle cx="0" cy="0" r="72" fill="#111" />
+
+        {/* Lens background (tinted + dark center to enhance LED contrast) */}
+        <circle cx="0" cy="0" r="70" fill="url(#lens-bg)" />
+
+        {/* LED dots */}
+        {dots.map((d, i) => (
+          <circle
+            key={i}
+            cx={d.x}
+            cy={d.y}
+            r="3.8"
+            fill="url(#led-dot)"
+            filter="url(#led-blur)"
+          />
+        ))}
+
+        {/* Subtle top glass reflection */}
+        <ellipse cx="-18" cy="-32" rx="30" ry="12"
+                 fill="white" opacity="0.08" filter="url(#led-blur)" />
+
+        {/* Large score number */}
+        <text
+          x="0" y="4"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#ffffff"
+          fontSize="42"
+          fontWeight="900"
+          style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.85))' }}
+        >
+          {Math.round(score)}
+        </text>
+      </svg>
     </div>
   );
 }

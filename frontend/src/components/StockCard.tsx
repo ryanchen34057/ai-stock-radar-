@@ -5,6 +5,7 @@ import type { BreakoutPending } from '../utils/breakoutPending';
 import { patternLabel } from '../utils/breakoutPending';
 import { useMASignal } from '../hooks/useMASignal';
 import { MiniKlineChart } from './MiniKlineChart';
+import { useDashboardStore } from '../store/dashboardStore';
 import { formatPrice, formatChange, formatChangePct, formatVolume } from '../utils/formatters';
 import { layerShortCode, LAYER_THEME, THEME_COLORS } from '../types/stock';
 import PeTooltip from './PeTooltip';
@@ -166,6 +167,7 @@ export function StockCard({ stock, selectedMA, insti, breakout, onClick }: Props
   const { signal, badgeType, badgePeriod, maValue, distance } = useMASignal(stock, selectedMA);
   const isUp = (stock.change ?? 0) >= 0;
   const hasData = stock.current_price !== null;
+  const showBollinger = useDashboardStore((s) => s.showBollinger);
 
   // K-line completeness overlay state.
   // Primary signal: backend's data_complete flag (set by real-earliest-date check).
@@ -365,6 +367,7 @@ export function StockCard({ stock, selectedMA, insti, breakout, onClick }: Props
             selectedMA={selectedMA}
             maValues={stock.ma}
             signal={signal}
+            showBollinger={showBollinger}
           />
         ) : (
           <div className="h-[88px] flex items-center justify-center text-text-t text-xs">

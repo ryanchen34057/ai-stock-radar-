@@ -2,15 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import type { KLine, MAPeriod, MAValues } from '../types/stock';
 import { calculateMAFull } from '../utils/calcMA';
+import { calculateBollingerBands } from '../utils/calcBB';
 
 interface Props {
   klines: KLine[];
   selectedMA: MAPeriod;
   maValues: MAValues;
   signal: 'above' | 'below' | 'at';
+  showBollinger?: boolean;
 }
 
-export function MiniKlineChart({ klines, selectedMA, maValues }: Props) {
+export function MiniKlineChart({ klines, selectedMA, showBollinger }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -92,10 +94,53 @@ export function MiniKlineChart({ klines, selectedMA, maValues }: Props) {
       .filter((d): d is { time: import('lightweight-charts').UTCTimestamp; value: number } => d.value !== null);
     maSeries.setData(maData);
 
+    // Bollinger Bands overlay (20, 2). Three thin light-purple lines; upper
+    // and lower are dashed to distinguish them from the MA line.
+    if (showBollinger) {
+      const bb = calculateBollingerBands(closes, 20, 2);
+      const toData = (vals: (number | null)[]) =>
+        klines
+          .map((k, i) => ({
+            time: k.date as unknown as import('lightweight-charts').UTCTimestamp,
+            value: vals[i],
+          }))
+          .filter((d): d is { time: import('lightweight-charts').UTCTimestamp; value: number } =>
+            d.value !== null);
+
+      const upperSeries = chart.addLineSeries({
+        color: 'rgba(187,137,255,0.85)',  // purple
+        lineWidth: 1,
+        lineStyle: 2,                      // dashed
+        crosshairMarkerVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
+      upperSeries.setData(toData(bb.upper));
+
+      const lowerSeries = chart.addLineSeries({
+        color: 'rgba(187,137,255,0.85)',
+        lineWidth: 1,
+        lineStyle: 2,
+        crosshairMarkerVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
+      lowerSeries.setData(toData(bb.lower));
+
+      const midSeries = chart.addLineSeries({
+        color: 'rgba(187,137,255,0.5)',
+        lineWidth: 1,
+        crosshairMarkerVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+      });
+      midSeries.setData(toData(bb.middle));
+    }
+
     chart.timeScale().fitContent();
 
     return () => chart.remove();
-  }, [isVisible, klines, selectedMA]);
+  }, [isVisible, klines, selectedMA, showBollinger]);
 
   return <div ref={containerRef} className="w-full" style={{ height: 88 }} />;
 }

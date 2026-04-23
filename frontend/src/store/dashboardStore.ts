@@ -25,6 +25,7 @@ interface DashboardState {
   selectedLayers: number[];
   sortBy: SortBy;
   darkMode: boolean;
+  showBollinger: boolean;   // overlay Bollinger Bands (20,2) on every card's mini chart
   selectedStock: StockData | null;
 
   // Actions
@@ -47,6 +48,7 @@ interface DashboardState {
   clearLayers: () => void;
   setSortBy: (sort: SortBy) => void;
   toggleDarkMode: () => void;
+  toggleBollinger: () => void;
   setSelectedStock: (stock: StockData | null) => void;
 }
 
@@ -104,6 +106,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectedLayers: [],
   sortBy: 'change_percent',
   darkMode: true,
+  showBollinger: false,
   selectedStock: null,
 
   setStocks: (stocks, lastUpdated) =>
@@ -130,6 +133,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     })),
   clearLayers: () => set({ selectedLayers: [] }),
   setSortBy: (sortBy) => set({ sortBy }),
+  toggleBollinger: () => set((s) => ({ showBollinger: !s.showBollinger })),
   toggleDarkMode: () =>
     set((s) => {
       const next = !s.darkMode;

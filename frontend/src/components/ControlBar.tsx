@@ -100,6 +100,8 @@ export function ControlBar() {
   } = useDashboardStore();
   const stocks = useDashboardStore((s) => s.stocks);
   const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
+  const showBollinger = useDashboardStore((s) => s.showBollinger);
+  const toggleBollinger = useDashboardStore((s) => s.toggleBollinger);
   const { refresh } = useStockData();
 
   // ── Search autocomplete ──
@@ -305,6 +307,17 @@ export function ControlBar() {
               {ma}日
             </button>
           ))}
+          <button
+            onClick={toggleBollinger}
+            title="在每張小卡 K 線上疊加布林通道 (20, 2σ)"
+            className={`ml-2 px-2.5 py-1 text-xs rounded font-semibold transition-colors border ${
+              showBollinger
+                ? 'bg-purple-500/25 text-purple-300 border-purple-500/60'
+                : 'bg-card-bg text-text-s border-border-c hover:text-text-p'
+            }`}
+          >
+            BB 通道
+          </button>
         </div>
 
         <div className="flex items-center gap-1">

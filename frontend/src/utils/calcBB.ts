@@ -27,6 +27,20 @@ function rollingStats(closes: number[], period: number): { ma: (number | null)[]
   return { ma, sd };
 }
 
+/** Compute full Bollinger Band series (upper / middle / lower). Nulls before window fills. */
+export function calculateBollingerBands(
+  closes: number[],
+  period: number = DEFAULT_PERIOD,
+  stdev: number = DEFAULT_STDEV,
+): { upper: (number | null)[]; middle: (number | null)[]; lower: (number | null)[] } {
+  const { ma, sd } = rollingStats(closes, period);
+  const upper = ma.map((m, i) =>
+    m === null || sd[i] === null ? null : m + stdev * sd[i]!);
+  const lower = ma.map((m, i) =>
+    m === null || sd[i] === null ? null : m - stdev * sd[i]!);
+  return { upper, middle: ma, lower };
+}
+
 /** Compute BBW series (as percentage: 100 × (upper-lower)/middle). Nulls where window is incomplete. */
 export function calculateBBW(
   closes: number[],

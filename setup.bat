@@ -28,9 +28,9 @@ echo [1/5] Checking Python...
 :: Robust Python detection. `if errorlevel` inside parentheses is parse-time
 :: in CMD (not runtime), so we use `&&` chains on single lines.
 set "PY_CMD="
-py --version 1>nul 2>&1 && set "PY_CMD=py"
-if not defined PY_CMD python --version 1>nul 2>&1 && set "PY_CMD=python"
-if not defined PY_CMD python3 --version 1>nul 2>&1 && set "PY_CMD=python3"
+for %%P in (py python python3) do if not defined PY_CMD (
+    %%P --version 1>nul 2>&1 && set "PY_CMD=%%P"
+)
 
 if not defined PY_CMD (
     echo   [FAIL] No Python found on this system.

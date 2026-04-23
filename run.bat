@@ -41,9 +41,9 @@ if not exist "%~dp0frontend\dist\index.html" (
 :: Pick a Python runner. Using `&&` chains because CMD's `if errorlevel`
 :: inside parentheses is parse-time, not runtime.
 set "PY_CMD="
-py --version 1>nul 2>&1 && set "PY_CMD=py"
-if not defined PY_CMD python --version 1>nul 2>&1 && set "PY_CMD=python"
-if not defined PY_CMD python3 --version 1>nul 2>&1 && set "PY_CMD=python3"
+for %%P in (py python python3) do if not defined PY_CMD (
+    %%P --version 1>nul 2>&1 && set "PY_CMD=%%P"
+)
 if not defined PY_CMD (
     echo   [FAIL] No Python found. Run setup.bat first.
     pause

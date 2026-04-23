@@ -44,9 +44,9 @@ pause
 :: CMD's `if errorlevel` inside parentheses is parse-time, not runtime, so we
 :: use `&&` chains on single lines to evaluate the errorlevel correctly.
 set "PY_CMD="
-py --version 1>/dev/null 2>&1 && set "PY_CMD=py"
-if not defined PY_CMD python --version 1>/dev/null 2>&1 && set "PY_CMD=python"
-if not defined PY_CMD python3 --version 1>/dev/null 2>&1 && set "PY_CMD=python3"
+for %%P in (py python python3) do if not defined PY_CMD (
+    %%P --version 1>/dev/null 2>&1 && set "PY_CMD=%%P"
+)
 if not defined PY_CMD (
     echo   [FAIL] Python not found. Re-run setup.bat first.
     pause
@@ -187,4 +187,5 @@ echo   Your data (stocks.db, settings, FB cookie) was not touched.
 echo   Run run.bat to start the updated app.
 echo ================================================================
 pause
+
 

@@ -58,21 +58,21 @@ export function calculateBBW(
 }
 
 /**
- * "Band-expansion from squeeze" signal — true when:
- *   1. Current BBW is meaningfully above its recent minimum
- *      (expansionRatio, default 1.3x = 30% wider than squeeze bottom)
- *   2. The squeeze bottom was within the last `squeezeLookback` bars
- *      (recently squeezed, not just coming off a year-old tight)
- *   3. BBW is currently rising (today > some bars back)
+ * "布林通道剛打開" signal -- specific bullish squeeze-breakout pattern:
+ *   1. 通道原先被壓縮: BBW at the cross day is near its pre-cross minimum
+ *      (squeeze was still in effect right up to the breakout bar)
+ *   2. 最近收盤突破上軌: a close cross-up above upper band within N bars
+ *   3. 空間開始打開: today's BBW is meaningfully above the squeeze low
  *
- * Returns { triggered, currentBBW, minBBW, minBBWIndex } for both filter + badge.
+ * Returns null if not enough history.
  */
 export interface BBExpansionResult {
   triggered: boolean;
-  currentBBW: number;
-  minBBW: number;
-  daysSinceSqueeze: number;
-  expansionPct: number;   // (current - min) / min × 100
+  daysSinceCross: number;
+  squeezeBBW: number;       // pre-cross BBW low
+  crossBBW: number;         // BBW on the cross day
+  todayBBW: number;         // current BBW
+  expansionPct: number;     // (today - squeezeLow) / squeezeLow × 100
 }
 
 /**
@@ -147,56 +147,62 @@ export function analyzeBBExpansion(
   opts: {
     period?: number;
     stdev?: number;
-    squeezeLookback?: number;   // window in which the squeeze-low must lie
-    expansionRatio?: number;    // current / min threshold
-    risingLookback?: number;    // days back to confirm BBW is rising
+    crossWindowDays?: number;    // cross-up must be within this many bars
+    squeezePreRange?: number;    // bars BEFORE cross to scan for squeeze low
+    squeezeTolerance?: number;   // cross-day BBW <= preMin × this (1.2 = within 20%)
+    expansionRatio?: number;     // today BBW >= preMin × this      (1.2 = 20% wider)
   } = {},
 ): BBExpansionResult | null {
   const period = opts.period ?? 20;
   const stdev = opts.stdev ?? 2;
-  const lookback = opts.squeezeLookback ?? 15;
-  const expRatio = opts.expansionRatio ?? 1.3;
-  const risingLB = opts.risingLookback ?? 3;
+  const crossWindow = opts.crossWindowDays ?? 5;
+  const preRange = opts.squeezePreRange ?? 20;
+  const squeezeTol = opts.squeezeTolerance ?? 1.2;
+  const expRatio = opts.expansionRatio ?? 1.2;
 
   const bbw = calculateBBW(closes, period, stdev);
-  const n = bbw.length;
-  if (n === 0) return null;
+  const { upper } = calculateBollingerBands(closes, period, stdev);
+  const n = closes.length;
+  if (n < period + preRange + 1) return null;
 
-  const current = bbw[n - 1];
-  if (current === null) return null;
-
-  // Look back `lookback` bars (plus a small buffer so we capture the bottom tick)
-  const start = Math.max(0, n - 1 - lookback);
-  let minVal = Infinity;
-  let minIdx = -1;
-  for (let i = start; i < n; i++) {
-    const v = bbw[i];
-    if (v !== null && v < minVal) {
-      minVal = v;
-      minIdx = i;
+  // 1. Find the most recent cross-up bar (close crosses above upper band)
+  let crossDay = -1;
+  const searchFrom = Math.max(1, n - crossWindow - 1);
+  for (let i = n - 1; i >= searchFrom; i--) {
+    const u = upper[i];
+    const uPrev = upper[i - 1];
+    if (u === null || uPrev === null) continue;
+    if (closes[i] >= u && closes[i - 1] < uPrev) {
+      crossDay = i;
+      break;
     }
   }
-  if (minIdx < 0 || minVal === 0) return null;
+  if (crossDay < 0) return null;
 
-  const daysSince = n - 1 - minIdx;
-  const expansionPct = ((current - minVal) / minVal) * 100;
+  // 2. Was BBW compressed right up to the breakout? Scan `preRange` bars
+  //    before the cross for the minimum BBW.
+  const preStart = Math.max(0, crossDay - preRange);
+  let preMin = Infinity;
+  for (let i = preStart; i < crossDay; i++) {
+    const v = bbw[i];
+    if (v !== null && v < preMin) preMin = v;
+  }
+  if (!Number.isFinite(preMin) || preMin === 0) return null;
 
-  // Rising confirmation: today > N bars back (simple slope check)
-  const pastIdx = Math.max(0, n - 1 - risingLB);
-  const past = bbw[pastIdx];
-  const rising = past !== null && current > past;
+  const crossBBW = bbw[crossDay];
+  const todayBBW = bbw[n - 1];
+  if (crossBBW === null || todayBBW === null) return null;
 
-  const triggered =
-    current >= minVal * expRatio      // expanded enough off the low
-    && daysSince >= 1                 // low was yesterday or earlier
-    && daysSince <= lookback          // low was recent
-    && rising;                        // currently widening, not contracting
+  const squeezeTight = crossBBW <= preMin * squeezeTol;  // bands still tight at breakout
+  const hasExpanded  = todayBBW >= preMin * expRatio;    // bands have widened since
+  const daysSinceCross = n - 1 - crossDay;
 
   return {
-    triggered,
-    currentBBW: current,
-    minBBW: minVal,
-    daysSinceSqueeze: daysSince,
-    expansionPct,
+    triggered: squeezeTight && hasExpanded,
+    daysSinceCross,
+    squeezeBBW: preMin,
+    crossBBW,
+    todayBBW,
+    expansionPct: ((todayBBW - preMin) / preMin) * 100,
   };
 }

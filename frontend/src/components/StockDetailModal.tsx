@@ -202,29 +202,37 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
             d.value !== null);
       };
 
-      // Upper + Lower: dashed solid-color lines so their right-axis tags
-      // render as opaque colored boxes (matches MA label style instead of
-      // floating faint numbers). Short titles keep tags compact.
+      // All three BB lines get a horizontal dashed price line across the
+      // chart (like the close-price reference line) so the right-axis tag
+      // visually connects to the current value level.
+      const bbPriceLine = {
+        priceLineVisible: true,
+        priceLineSource: 0,            // 0 = LastBar — draw at the series's latest value
+        priceLineWidth: 1 as const,
+        priceLineColor: '#BB89FF',
+        priceLineStyle: 2,             // 2 = Dashed
+      };
       const upperS = chart.addLineSeries({
         color: '#BB89FF', lineWidth: 1, lineStyle: 2,
-        crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false,
+        crosshairMarkerVisible: false, lastValueVisible: true,
         title: 'BB上',
+        ...bbPriceLine,
       });
       upperS.setData(toData(bb.upper));
 
       const lowerS = chart.addLineSeries({
         color: '#BB89FF', lineWidth: 1, lineStyle: 2,
-        crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false,
+        crosshairMarkerVisible: false, lastValueVisible: true,
         title: 'BB下',
+        ...bbPriceLine,
       });
       lowerS.setData(toData(bb.lower));
 
-      // Mid line = MA20. Show its price tag too (user may have hidden MA20
-      // via the toggle pills, in which case BB中 is the only way to see it).
       const midS = chart.addLineSeries({
         color: '#BB89FF', lineWidth: 1,
-        crosshairMarkerVisible: false, lastValueVisible: true, priceLineVisible: false,
+        crosshairMarkerVisible: false, lastValueVisible: true,
         title: 'BB中',
+        ...bbPriceLine,
       });
       midS.setData(toData(bb.middle));
     }

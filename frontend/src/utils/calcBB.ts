@@ -75,6 +75,73 @@ export interface BBExpansionResult {
   expansionPct: number;   // (current - min) / min × 100
 }
 
+/**
+ * "剛站上布林上軌" signal — detect the most recent close ≥ upper-band cross-up
+ * (close was below yesterday, at/above today). Returns how many trading days
+ * ago the cross happened so callers can gate by a window.
+ *
+ *   withinDays: cross must be within the last N trading days
+ *   requireStillAbove: if true, today's close must ALSO still be >= upper
+ *                      (i.e. sustained breakout); if false, we only care the
+ *                      cross was recent, even if price has pulled back below.
+ */
+export interface BBUpperCrossResult {
+  triggered: boolean;
+  daysSinceCross: number | null;   // null if no cross found in window
+  currentPctB: number | null;      // 0=on lower, 0.5=mid, 1=on upper
+}
+
+export function analyzeBBUpperCross(
+  closes: number[],
+  opts: {
+    withinDays?: number;
+    period?: number;
+    stdev?: number;
+    requireStillAbove?: boolean;
+  } = {},
+): BBUpperCrossResult | null {
+  const withinDays = opts.withinDays ?? 3;
+  const period = opts.period ?? 20;
+  const stdev = opts.stdev ?? 2;
+  const requireStill = opts.requireStillAbove ?? false;
+
+  const { upper, lower } = calculateBollingerBands(closes, period, stdev);
+  const n = closes.length;
+  if (n < period + 2) return null;
+
+  const todayUp = upper[n - 1];
+  const todayLo = lower[n - 1];
+  const todayClose = closes[n - 1];
+  const currentPctB = (todayUp !== null && todayLo !== null && todayUp !== todayLo)
+    ? (todayClose - todayLo) / (todayUp - todayLo)
+    : null;
+
+  // Search backwards for the most recent cross-up bar
+  let crossDay = -1;
+  const searchStart = Math.max(1, n - withinDays - 1);
+  for (let i = n - 1; i >= searchStart; i--) {
+    const u = upper[i];
+    const uPrev = upper[i - 1];
+    if (u === null || uPrev === null) continue;
+    if (closes[i] >= u && closes[i - 1] < uPrev) {
+      crossDay = i;
+      break;
+    }
+  }
+
+  if (crossDay < 0) {
+    return { triggered: false, daysSinceCross: null, currentPctB };
+  }
+
+  const daysSince = n - 1 - crossDay;
+  let triggered = daysSince <= withinDays;
+  if (requireStill && todayUp !== null) {
+    triggered = triggered && todayClose >= todayUp;
+  }
+  return { triggered, daysSinceCross: daysSince, currentPctB };
+}
+
+
 export function analyzeBBExpansion(
   closes: number[],
   opts: {

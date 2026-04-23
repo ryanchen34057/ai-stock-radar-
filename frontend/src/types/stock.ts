@@ -129,6 +129,22 @@ export interface BreakoutPendingFilter {
   minBaseDays: number;  // e.g. 15 — high must be at least this many bars ago
 }
 
+/**
+ * "站上布林上軌" filter — stocks whose most recent close crossed above the
+ * upper Bollinger Band within the last N trading days. Strong-momentum
+ * breakout signal per the Bollinger trend-following interpretation.
+ *
+ *   withinDays       — cross must have happened within this many bars
+ *   requireStillAbove — if true, today's close must ALSO still be at/above
+ *                       the upper band (filters out pullbacks that have since
+ *                       re-entered the band)
+ */
+export interface BBUpperCrossFilter {
+  enabled: boolean;
+  withinDays: number;     // 1 / 3 / 5 / 7 / 10
+  requireStillAbove: boolean;
+}
+
 export interface SpecialFilters {
   maBullishAlignment: boolean; // MA5 > MA10 > MA20 > MA60
   price20DayHigh: boolean;     // today close = 20-day high

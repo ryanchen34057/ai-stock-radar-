@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance, calculateMAFull } from '../utils/calcMA';
-import { analyzeBBExpansion } from '../utils/calcBB';
+import { analyzeBBExpansion, analyzeBBUpperCross } from '../utils/calcBB';
 import { analyzeBreakoutPending, type BreakoutPending } from '../utils/breakoutPending';
 import { getDisplayPe } from '../utils/formatPe';
 import { calculateKD, getKDTrend } from '../utils/calcKD';
@@ -16,6 +16,7 @@ interface Props {
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
   breakoutPendingFilter: BreakoutPendingFilter;
+  bbUpperCrossFilter: BBUpperCrossFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -29,7 +30,7 @@ interface Props {
 }
 
 export function StockGrid({
-  stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter,
+  stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter,
   specialFilters, instiFilters, priceFilter, peFilter, kdFilters,
   themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
@@ -247,6 +248,22 @@ export function StockGrid({
       });
     }
 
+    // 站上布林上軌 — most recent close crossed above upper BB within the
+    // user-specified window. Default 3 days; the pill group lets user pick
+    // 1/3/5/7/10. requireStillAbove gates whether today's close must still
+    // be above the upper band too.
+    if (bbUpperCrossFilter.enabled) {
+      result = result.filter((s) => {
+        if (s.klines.length < 25) return false;
+        const closes = s.klines.map((k) => k.close);
+        const r = analyzeBBUpperCross(closes, {
+          withinDays: bbUpperCrossFilter.withinDays,
+          requireStillAbove: bbUpperCrossFilter.requireStillAbove,
+        });
+        return r !== null && r.triggered;
+      });
+    }
+
     // Breakout-pending scan — stocks sitting in a base (W / U / cup / flat)
     // near their prior high, about to attempt a breakout.
     if (breakoutPendingFilter.enabled) {
@@ -278,7 +295,7 @@ export function StockGrid({
           return 0;
       }
     });
-  }, [stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
+  }, [stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
 
   // Pre-compute breakout analyses so cards don't re-run the logic twice.
   const breakoutBySymbol = useMemo<Map<string, BreakoutPending>>(() => {

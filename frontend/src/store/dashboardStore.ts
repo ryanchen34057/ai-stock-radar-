@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 
 interface DashboardState {
   // Data
@@ -14,6 +14,7 @@ interface DashboardState {
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
   breakoutPendingFilter: BreakoutPendingFilter;
+  bbUpperCrossFilter: BBUpperCrossFilter;
   specialFilters: SpecialFilters;
   instiFilters: InstiFilters;
   priceFilter: RangeFilter;
@@ -36,6 +37,7 @@ interface DashboardState {
   setAlertFilter: (filter: AlertFilter) => void;
   setMAProximityFilter: (f: MAProximityFilter) => void;
   setBreakoutPendingFilter: (f: BreakoutPendingFilter) => void;
+  setBBUpperCrossFilter: (f: BBUpperCrossFilter) => void;
   setSpecialFilters: (f: SpecialFilters) => void;
   setInstiFilters: (f: InstiFilters) => void;
   setPriceFilter: (f: RangeFilter) => void;
@@ -95,6 +97,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   alertFilter: 'all',
   maProximityFilter: { enabled: false, ma: 20, direction: 'above', threshold: 3 },
   breakoutPendingFilter: { enabled: false, lookback: 60, threshold: 5, minBaseDays: 15 },
+  bbUpperCrossFilter: { enabled: false, withinDays: 3, requireStillAbove: false },
   specialFilters: DEFAULT_SPECIAL,
   instiFilters: DEFAULT_INSTI,
   priceFilter: { enabled: false, min: null, max: null },
@@ -117,6 +120,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setAlertFilter: (alertFilter) => set({ alertFilter }),
   setMAProximityFilter: (maProximityFilter) => set({ maProximityFilter }),
   setBreakoutPendingFilter: (breakoutPendingFilter) => set({ breakoutPendingFilter }),
+  setBBUpperCrossFilter: (bbUpperCrossFilter) => set({ bbUpperCrossFilter }),
   setSpecialFilters: (specialFilters) => set({ specialFilters }),
   setInstiFilters: (instiFilters) => set({ instiFilters }),
   setPriceFilter: (priceFilter) => set({ priceFilter }),

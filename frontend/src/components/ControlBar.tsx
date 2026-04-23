@@ -102,6 +102,8 @@ export function ControlBar() {
   const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
   const showBollinger = useDashboardStore((s) => s.showBollinger);
   const toggleBollinger = useDashboardStore((s) => s.toggleBollinger);
+  const bbUpperCrossFilter = useDashboardStore((s) => s.bbUpperCrossFilter);
+  const setBBUpperCrossFilter = useDashboardStore((s) => s.setBBUpperCrossFilter);
   const { refresh } = useStockData();
 
   // ── Search autocomplete ──
@@ -536,6 +538,58 @@ export function ControlBar() {
           >
           布林通道剛打開
         </FilterPill>
+
+        {/* 站上布林上軌 — filter + inline window selector */}
+        <div className={`flex items-center gap-1 pl-2 ml-1 border-l border-border-c
+                         ${bbUpperCrossFilter.enabled ? '' : 'opacity-80'}`}>
+          <FilterPill
+            active={bbUpperCrossFilter.enabled}
+            onClick={() => setBBUpperCrossFilter({
+              ...bbUpperCrossFilter,
+              enabled: !bbUpperCrossFilter.enabled,
+            })}
+            activeClass="bg-tw-up/25 text-tw-up border-tw-up/50"
+          >
+            站上布林上軌
+          </FilterPill>
+          {/* Window picker */}
+          <span className="text-[11px] text-text-s">近</span>
+          {[1, 3, 5, 7, 10].map((d) => {
+            const active = bbUpperCrossFilter.enabled && bbUpperCrossFilter.withinDays === d;
+            return (
+              <button
+                key={d}
+                onClick={() => setBBUpperCrossFilter({
+                  ...bbUpperCrossFilter,
+                  enabled: true,
+                  withinDays: d,
+                })}
+                className={`px-1.5 py-0.5 text-[11px] rounded font-mono transition-colors border select-none ${
+                  active
+                    ? 'bg-tw-up/25 text-tw-up border-tw-up/50 font-bold'
+                    : 'bg-card-bg text-text-s border-border-c hover:text-text-p'
+                }`}
+              >
+                {d}日
+              </button>
+            );
+          })}
+          {/* 維持站上 toggle */}
+          <label className={`flex items-center gap-1 text-[11px] ml-1 select-none cursor-pointer
+                            ${bbUpperCrossFilter.enabled ? 'text-text-p' : 'text-text-t'}`}>
+            <input
+              type="checkbox"
+              checked={bbUpperCrossFilter.requireStillAbove}
+              onChange={(e) => setBBUpperCrossFilter({
+                ...bbUpperCrossFilter,
+                requireStillAbove: e.target.checked,
+              })}
+              disabled={!bbUpperCrossFilter.enabled}
+              className="accent-tw-up w-3 h-3"
+            />
+            仍站上
+          </label>
+        </div>
       </div>
 
       {/* ── Row 3b: price & PE range filters ── */}

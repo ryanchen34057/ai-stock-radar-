@@ -372,15 +372,30 @@ function LedLight({ color, score }: { color: string; score: number }) {
 
       <svg viewBox="-80 -80 160 160" width="160" height="160" className="relative bulb-body">
         <defs>
-          <radialGradient id="lens-glow" cx="38%" cy="32%" r="68%">
-            {/* bright core -> main color -> slightly darker rim */}
-            <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.9"  />
-            <stop offset="18%"  stopColor={color}   stopOpacity="1"    />
-            <stop offset="60%"  stopColor={color}   stopOpacity="0.95" />
-            <stop offset="100%" stopColor={color}   stopOpacity="0.55" />
+          {/* Glass lens: bright filament-like core in the upper-left, color
+              saturation through the body, slightly darker lower-right edge
+              where light falls off. Wide bright core = translucent feel. */}
+          <radialGradient id="lens-glow" cx="35%" cy="30%" r="75%">
+            <stop offset="0%"   stopColor="#ffffff" stopOpacity="1"    />
+            <stop offset="10%"  stopColor="#ffffff" stopOpacity="0.7"  />
+            <stop offset="28%"  stopColor={color}   stopOpacity="0.95" />
+            <stop offset="65%"  stopColor={color}   stopOpacity="0.85" />
+            <stop offset="100%" stopColor={color}   stopOpacity="0.45" />
+          </radialGradient>
+          {/* Overhead light pass — brightens the top half ("light rises") */}
+          <linearGradient id="top-light" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.28" />
+            <stop offset="50%"  stopColor="#ffffff" stopOpacity="0"    />
+            <stop offset="100%" stopColor="#000000" stopOpacity="0.18" />
+          </linearGradient>
+          {/* Thin rim glow — where light refracts at the glass edge */}
+          <radialGradient id="rim-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="80%"  stopColor={color}   stopOpacity="0"    />
+            <stop offset="94%"  stopColor="#ffffff" stopOpacity="0.35" />
+            <stop offset="100%" stopColor={color}   stopOpacity="0"    />
           </radialGradient>
           <filter id="soft-blur" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="1" />
+            <feGaussianBlur stdDeviation="1.2" />
           </filter>
         </defs>
 
@@ -389,10 +404,14 @@ function LedLight({ color, score }: { color: string; score: number }) {
         <circle cx="0" cy="0" r="75" fill="#2a2a2a" />
         <circle cx="0" cy="0" r="72" fill="#111" />
 
-        {/* Smooth glass lens with bright gradient glow */}
+        {/* Glass lens — main colored glow */}
         <circle cx="0" cy="0" r="70" fill="url(#lens-glow)" />
+        {/* Top lighting pass (translucent feel) */}
+        <circle cx="0" cy="0" r="70" fill="url(#top-light)" />
+        {/* Rim light where the glass meets the bezel */}
+        <circle cx="0" cy="0" r="70" fill="url(#rim-glow)" />
 
-        {/* Subtle inner shadow ring to anchor the lens inside the bezel */}
+        {/* Inner bezel shadow to separate glass from frame */}
         <circle
           cx="0" cy="0" r="70"
           fill="none"
@@ -400,15 +419,20 @@ function LedLight({ color, score }: { color: string; score: number }) {
           strokeWidth="2"
         />
 
-        {/* Top glass highlight — thick soft-focus reflection */}
+        {/* Top-left glass highlight — thick soft reflection */}
         <ellipse
-          cx="-15" cy="-30" rx="40" ry="15"
-          fill="white" opacity="0.22" filter="url(#soft-blur)"
+          cx="-15" cy="-32" rx="42" ry="16"
+          fill="white" opacity="0.30" filter="url(#soft-blur)"
         />
-        {/* Small concentrated highlight */}
+        {/* Small concentrated highlight (specular hot-spot) */}
         <ellipse
-          cx="-22" cy="-38" rx="12" ry="5"
-          fill="white" opacity="0.5" filter="url(#soft-blur)"
+          cx="-22" cy="-40" rx="13" ry="5"
+          fill="white" opacity="0.65" filter="url(#soft-blur)"
+        />
+        {/* Second small highlight on the opposite side to suggest translucent glass */}
+        <ellipse
+          cx="24" cy="22" rx="18" ry="8"
+          fill="white" opacity="0.08" filter="url(#soft-blur)"
         />
 
         {/* Large score number */}

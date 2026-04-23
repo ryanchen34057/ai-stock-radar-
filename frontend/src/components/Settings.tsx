@@ -152,6 +152,7 @@ export function Settings() {
       setSaveResult('ok');
       setYtValue('');
       setGeminiValue('');
+      setFinmindValue('');
       setModelDirty(false);
       fetchSettings();
     } catch {
@@ -162,7 +163,8 @@ export function Settings() {
     }
   };
 
-  const hasChanges = ytValue.trim() !== '' || geminiValue.trim() !== '' || modelDirty;
+  const hasChanges = ytValue.trim() !== '' || geminiValue.trim() !== ''
+                   || finmindValue.trim() !== '' || modelDirty;
 
   const [refreshIntervalMin, setRefreshIntervalMin] = useNewsRefreshInterval();
   const [refreshInput, setRefreshInput] = useState<string>(String(refreshIntervalMin));

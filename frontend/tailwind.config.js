@@ -5,8 +5,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        'tw-up': '#FF3B3B',
-        'tw-down': '#00C851',
+        // Up/down colors are driven by CSS variables so the US dashboard
+        // can swap them at the container level (`.market-us` → green-up/
+        // red-down Western convention), without touching every component.
+        'tw-up':   'rgb(var(--tw-up)   / <alpha-value>)',
+        'tw-down': 'rgb(var(--tw-down) / <alpha-value>)',
         'tw-at': '#FFB020',
         'dash-bg': '#0D1117',
         'card-bg': '#161B22',

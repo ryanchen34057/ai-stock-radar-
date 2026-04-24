@@ -306,7 +306,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      className={`fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 ${stock.market === 'US' ? 'market-us' : ''}`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-dash-bg border border-border-c rounded-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">

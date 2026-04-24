@@ -29,7 +29,7 @@ export function Dashboard() {
   }, [market]);
 
   return (
-    <div className="bg-dash-bg text-text-p">
+    <div className={`bg-dash-bg text-text-p ${market === 'US' ? 'market-us' : ''}`}>
       <MarketIndices />
       <ControlBar />
       {market === 'TW' && <BusinessCycle />}

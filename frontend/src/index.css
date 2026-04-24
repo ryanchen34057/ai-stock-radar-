@@ -3,6 +3,17 @@
 @tailwind utilities;
 
 @layer base {
+  /* Up/down color tokens. Default (台股 Asia convention): red = up, green = down.
+     Any ancestor with `.market-us` flips to Western convention (green up, red down). */
+  :root {
+    --tw-up:   255 59 59;
+    --tw-down: 0 200 81;
+  }
+  .market-us {
+    --tw-up:   0 200 81;
+    --tw-down: 255 59 59;
+  }
+
   * {
     box-sizing: border-box;
   }

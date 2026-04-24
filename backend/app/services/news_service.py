@@ -352,11 +352,13 @@ def refresh_one_stalest(conn, market: str | None = None) -> dict:
             (market.upper(),),
         ).fetchone()
     else:
+        # Default to TW only — MOPS + Google News scraping for US is not
+        # reliable and flooded the schedule with thousands of US calls.
         row = conn.execute(
             """SELECT s.symbol, s.name, c.fetched_at
                FROM stocks s
                LEFT JOIN news_cache c ON s.symbol = c.symbol
-               WHERE s.enabled = 1
+               WHERE s.enabled = 1 AND s.market = 'TW'
                ORDER BY (c.fetched_at IS NULL) DESC, c.fetched_at ASC
                LIMIT 1"""
         ).fetchone()
@@ -396,7 +398,11 @@ def refresh_all_news(conn, skip_fresh_hours: int = 6, sleep_between: float = 1.0
     Fetch Google News for every stock that has no news cache or stale cache.
     Intended for background execution — polite delay between requests.
     """
-    stocks = conn.execute("SELECT symbol, name FROM stocks").fetchall()
+    # TW only — MOPS is TWSE-specific and Google News scraping for US
+    # symbols both floods the scheduler and doesn't produce useful results.
+    stocks = conn.execute(
+        "SELECT symbol, name FROM stocks WHERE enabled = 1 AND market = 'TW'"
+    ).fetchall()
     refreshed = 0
     skipped = 0
     for row in stocks:

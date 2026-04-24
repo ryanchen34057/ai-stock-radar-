@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useKolFeed, type KolVideo, type KolStockMention } from '../hooks/useKolFeed';
 import { useOpenStockBySymbol } from '../hooks/useOpenStockBySymbol';
+import { useDashboardStore } from '../store/dashboardStore';
 
 interface StockMentionAggregate {
   symbol: string;
@@ -66,7 +67,8 @@ function aggregateStockMentions(videos: KolVideo[]): StockMentionAggregate[] {
  * Mirrors the NewsFeed sidebar on the right.
  */
 export function KolFeed() {
-  const { items, loading, error, running, refresh } = useKolFeed(7);
+  const market = useDashboardStore((s) => s.market);
+  const { items, loading, error, running, refresh } = useKolFeed(7, market);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(new Set());
   const [statsOpen, setStatsOpen] = useState(true);

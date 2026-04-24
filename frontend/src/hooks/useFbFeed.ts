@@ -35,15 +35,17 @@ export interface FbPage {
   created_at: string;
 }
 
-export function useFbFeed(days = 7) {
+export function useFbFeed(days = 7, market?: 'TW' | 'US') {
   const [items, setItems] = useState<FbPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
+  const marketParam = market ? `&market=${market}` : '';
+
   const load = async () => {
     try {
-      const r = await fetch(`/api/fb/feed?days=${days}`);
+      const r = await fetch(`/api/fb/feed?days=${days}${marketParam}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       setItems(d.items ?? []);
@@ -65,39 +67,42 @@ export function useFbFeed(days = 7) {
   };
 
   const refresh = async () => {
-    await fetch(`/api/fb/refresh?days=${days}`, { method: 'POST' });
+    await fetch(`/api/fb/refresh?days=${days}${marketParam}`, { method: 'POST' });
     setRunning(true);
   };
 
   useEffect(() => {
+    setLoading(true);
     load(); checkStatus();
     const id = window.setInterval(() => { load(); checkStatus(); }, 30_000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+  }, [days, market]);
 
   return { items, loading, error, running, reload: load, refresh };
 }
 
-export function useFbPages() {
+export function useFbPages(market?: 'TW' | 'US') {
   const [pages, setPages] = useState<FbPage[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const marketParam = market ? `?market=${market}` : '';
 
   const load = async () => {
     setLoading(true);
     try {
-      const r = await fetch('/api/fb/pages');
+      const r = await fetch(`/api/fb/pages${marketParam}`);
       setPages(await r.json());
     } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [market]);
 
   const add = async (url_or_handle: string, name?: string) => {
     const r = await fetch('/api/fb/pages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url_or_handle, name }),
+      body: JSON.stringify({ url_or_handle, name, market: market ?? 'TW' }),
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));

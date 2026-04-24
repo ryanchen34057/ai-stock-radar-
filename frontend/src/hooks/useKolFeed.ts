@@ -30,15 +30,17 @@ export interface KolChannel {
   created_at: string;
 }
 
-export function useKolFeed(days = 7) {
+export function useKolFeed(days = 7, market?: 'TW' | 'US') {
   const [items, setItems] = useState<KolVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
+  const marketParam = market ? `&market=${market}` : '';
+
   const load = async () => {
     try {
-      const r = await fetch(`/api/kol/feed?days=${days}`);
+      const r = await fetch(`/api/kol/feed?days=${days}${marketParam}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       setItems(d.items ?? []);
@@ -60,42 +62,45 @@ export function useKolFeed(days = 7) {
   };
 
   const triggerRefresh = async () => {
-    await fetch(`/api/kol/refresh?days=${days}`, { method: 'POST' });
+    await fetch(`/api/kol/refresh?days=${days}${marketParam}`, { method: 'POST' });
     setRunning(true);
   };
 
   useEffect(() => {
+    setLoading(true);
     load();
     checkStatus();
     const id = window.setInterval(() => { load(); checkStatus(); }, 30_000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [days]);
+  }, [days, market]);
 
   return { items, loading, error, running, reload: load, refresh: triggerRefresh };
 }
 
-export function useKolChannels() {
+export function useKolChannels(market?: 'TW' | 'US') {
   const [channels, setChannels] = useState<KolChannel[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const marketParam = market ? `?market=${market}` : '';
 
   const load = async () => {
     setLoading(true);
     try {
-      const r = await fetch('/api/kol/channels');
+      const r = await fetch(`/api/kol/channels${marketParam}`);
       setChannels(await r.json());
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [market]);
 
   const add = async (url_or_id: string, name?: string) => {
     const r = await fetch('/api/kol/channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url_or_id, name }),
+      body: JSON.stringify({ url_or_id, name, market: market ?? 'TW' }),
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));

@@ -164,12 +164,20 @@ def _resolve_handle(handle: str) -> dict | None:
 
 # ── Channel CRUD ───────────────────────────────────────────────────────────────
 
-def list_channels() -> list[dict]:
+def list_channels(market: str | None = None) -> list[dict]:
     conn = get_connection()
     try:
-        rows = conn.execute(
-            "SELECT channel_id, name, description, enabled, created_at FROM kol_channels ORDER BY created_at DESC"
-        ).fetchall()
+        if market:
+            rows = conn.execute(
+                "SELECT channel_id, name, description, market, enabled, created_at "
+                "FROM kol_channels WHERE market = ? ORDER BY created_at DESC",
+                (market.upper(),),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT channel_id, name, description, market, enabled, created_at "
+                "FROM kol_channels ORDER BY created_at DESC"
+            ).fetchall()
         out = []
         for r in rows:
             d = dict(r)
@@ -180,26 +188,28 @@ def list_channels() -> list[dict]:
         conn.close()
 
 
-def add_channel(raw_input: str, custom_name: str | None = None) -> dict:
+def add_channel(raw_input: str, custom_name: str | None = None, market: str = "TW") -> dict:
     meta = resolve_channel(raw_input)
     if not meta:
         raise ValueError(f"無法解析 YouTube 頻道：{raw_input}")
     name = (custom_name or meta["name"]).strip()
+    mkt = (market or "TW").upper()
     conn = get_connection()
     try:
         existing = conn.execute(
-            "SELECT channel_id FROM kol_channels WHERE channel_id = ?", (meta["channel_id"],)
+            "SELECT channel_id, market FROM kol_channels WHERE channel_id = ?", (meta["channel_id"],)
         ).fetchone()
         if existing:
-            raise ValueError(f"頻道已存在：{name} ({meta['channel_id']})")
+            raise ValueError(f"頻道已存在：{name} ({meta['channel_id']}, {existing['market']})")
         conn.execute(
-            "INSERT INTO kol_channels (channel_id, name, description, enabled) VALUES (?, ?, ?, 1)",
-            (meta["channel_id"], name, meta.get("description", "")),
+            "INSERT INTO kol_channels (channel_id, name, description, market, enabled) VALUES (?, ?, ?, ?, 1)",
+            (meta["channel_id"], name, meta.get("description", ""), mkt),
         )
         conn.commit()
     finally:
         conn.close()
-    return {"channel_id": meta["channel_id"], "name": name, "description": meta.get("description", "")}
+    return {"channel_id": meta["channel_id"], "name": name,
+            "description": meta.get("description", ""), "market": mkt}
 
 
 def delete_channel(channel_id: str) -> bool:
@@ -434,7 +444,8 @@ def _persist_video(v: dict) -> None:
 _SUCCESSFUL_SUMMARISERS = {"notebooklm", "gemini"}
 
 
-def refresh_all_kol_feeds(days: int = DEFAULT_LOOKBACK_DAYS, force: bool = False) -> dict:
+def refresh_all_kol_feeds(days: int = DEFAULT_LOOKBACK_DAYS, force: bool = False,
+                           market: str | None = None) -> dict:
     """
     Fetch recent videos from every enabled KOL channel. A video is summarised
     when any of these are true:
@@ -445,7 +456,7 @@ def refresh_all_kol_feeds(days: int = DEFAULT_LOOKBACK_DAYS, force: bool = False
     This means videos stored during the Gemini-fallback era with empty
     summaries automatically get reprocessed via NotebookLM now.
     """
-    channels = [c for c in list_channels() if c["enabled"]]
+    channels = [c for c in list_channels(market=market) if c["enabled"]]
     if not channels:
         return {"channels": 0, "new_videos": 0, "summarised": 0, "retried": 0}
 
@@ -501,19 +512,31 @@ def refresh_all_kol_feeds(days: int = DEFAULT_LOOKBACK_DAYS, force: bool = False
     }
 
 
-def get_kol_feed(days: int = DEFAULT_LOOKBACK_DAYS) -> list[dict]:
+def get_kol_feed(days: int = DEFAULT_LOOKBACK_DAYS, market: str | None = None) -> list[dict]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     conn = get_connection()
     try:
-        rows = conn.execute(
-            """SELECT video_id, channel_id, channel_name, title, url, thumbnail,
-                      published_at, summary, stocks_json, overall_sentiment,
-                      summariser, processed_at
-               FROM kol_videos
-               WHERE published_at >= ?
-               ORDER BY published_at DESC""",
-            (cutoff,),
-        ).fetchall()
+        if market:
+            rows = conn.execute(
+                """SELECT v.video_id, v.channel_id, v.channel_name, v.title, v.url, v.thumbnail,
+                          v.published_at, v.summary, v.stocks_json, v.overall_sentiment,
+                          v.summariser, v.processed_at
+                   FROM kol_videos v
+                   JOIN kol_channels c ON v.channel_id = c.channel_id
+                   WHERE v.published_at >= ? AND c.market = ?
+                   ORDER BY v.published_at DESC""",
+                (cutoff, market.upper()),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT video_id, channel_id, channel_name, title, url, thumbnail,
+                          published_at, summary, stocks_json, overall_sentiment,
+                          summariser, processed_at
+                   FROM kol_videos
+                   WHERE published_at >= ?
+                   ORDER BY published_at DESC""",
+                (cutoff,),
+            ).fetchall()
     finally:
         conn.close()
     out = []

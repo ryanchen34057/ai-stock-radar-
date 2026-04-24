@@ -120,6 +120,7 @@ def init_schema():
                 channel_id  TEXT PRIMARY KEY,
                 name        TEXT NOT NULL,
                 description TEXT DEFAULT '',
+                market      TEXT NOT NULL DEFAULT 'TW',
                 enabled     INTEGER NOT NULL DEFAULT 1,
                 created_at  TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -147,6 +148,7 @@ def init_schema():
                 url         TEXT NOT NULL UNIQUE,
                 name        TEXT DEFAULT '',
                 kind        TEXT DEFAULT 'page',
+                market      TEXT NOT NULL DEFAULT 'TW',
                 enabled     INTEGER NOT NULL DEFAULT 1,
                 created_at  TEXT DEFAULT CURRENT_TIMESTAMP
             );
@@ -330,6 +332,20 @@ def init_schema():
         if existing_kol_cols and "summariser" not in existing_kol_cols:
             conn.execute("ALTER TABLE kol_videos ADD COLUMN summariser TEXT DEFAULT ''")
             conn.commit()
+
+        # v2.0 — per-market KOL channel / FB page subscriptions so TW and US
+        # tabs get independent feeds.
+        kol_ch_cols = {row[1] for row in conn.execute("PRAGMA table_info(kol_channels)").fetchall()}
+        if kol_ch_cols and "market" not in kol_ch_cols:
+            conn.execute("ALTER TABLE kol_channels ADD COLUMN market TEXT NOT NULL DEFAULT 'TW'")
+            conn.commit()
+        fb_pg_cols = {row[1] for row in conn.execute("PRAGMA table_info(fb_pages)").fetchall()}
+        if fb_pg_cols and "market" not in fb_pg_cols:
+            conn.execute("ALTER TABLE fb_pages ADD COLUMN market TEXT NOT NULL DEFAULT 'TW'")
+            conn.commit()
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_kol_channels_market ON kol_channels(market)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_fb_pages_market ON fb_pages(market)")
+        conn.commit()
     finally:
         conn.close()
 

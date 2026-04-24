@@ -1165,35 +1165,45 @@ def _parse_posted_at(label: str) -> str:
 
 # ── Page CRUD ─────────────────────────────────────────────────────────────────
 
-def list_pages() -> list[dict]:
+def list_pages(market: str | None = None) -> list[dict]:
     conn = get_connection()
     try:
-        rows = conn.execute(
-            "SELECT id, url, name, kind, enabled, created_at FROM fb_pages ORDER BY created_at DESC"
-        ).fetchall()
+        if market:
+            rows = conn.execute(
+                "SELECT id, url, name, kind, market, enabled, created_at "
+                "FROM fb_pages WHERE market = ? ORDER BY created_at DESC",
+                (market.upper(),),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, url, name, kind, market, enabled, created_at "
+                "FROM fb_pages ORDER BY created_at DESC"
+            ).fetchall()
         return [{**dict(r), "enabled": bool(r["enabled"])} for r in rows]
     finally:
         conn.close()
 
 
-def add_page(url_or_handle: str, custom_name: str | None = None) -> dict:
+def add_page(url_or_handle: str, custom_name: str | None = None, market: str = "TW") -> dict:
     meta = resolve_page(url_or_handle)
     if not meta:
         raise ValueError(f"無法解析 Facebook 專頁：{url_or_handle}（可能是網址錯誤、專頁不存在、或當前未登入）")
     pid = meta["id"]
+    mkt = (market or "TW").upper()
     conn = get_connection()
     try:
-        existing = conn.execute("SELECT id FROM fb_pages WHERE id = ?", (pid,)).fetchone()
+        existing = conn.execute("SELECT id, market FROM fb_pages WHERE id = ?", (pid,)).fetchone()
         if existing:
-            raise ValueError(f"專頁已存在：{meta['name']} ({pid})")
+            raise ValueError(f"專頁已存在：{meta['name']} ({pid}, {existing['market']})")
         conn.execute(
-            "INSERT INTO fb_pages (id, url, name, kind, enabled) VALUES (?, ?, ?, ?, 1)",
-            (pid, meta["url"], custom_name or meta["name"], meta["kind"]),
+            "INSERT INTO fb_pages (id, url, name, kind, market, enabled) VALUES (?, ?, ?, ?, ?, 1)",
+            (pid, meta["url"], custom_name or meta["name"], meta["kind"], mkt),
         )
         conn.commit()
     finally:
         conn.close()
-    return {"id": pid, "url": meta["url"], "name": custom_name or meta["name"], "kind": meta["kind"]}
+    return {"id": pid, "url": meta["url"], "name": custom_name or meta["name"],
+            "kind": meta["kind"], "market": mkt}
 
 
 def delete_page(page_id: str) -> bool:
@@ -1458,12 +1468,12 @@ def _persist_posts(page_id: str, page_name: str, posts: list[dict]) -> int:
     return n
 
 
-def refresh_all_pages(days: int = 7) -> dict:
+def refresh_all_pages(days: int = 7, market: str | None = None) -> dict:
     """Scrape every enabled page serially and persist posts."""
     if not _refresh_lock.acquire(blocking=False):
         return {"status": "already_running"}
     try:
-        pages = [p for p in list_pages() if p["enabled"]]
+        pages = [p for p in list_pages(market=market) if p["enabled"]]
         if not pages:
             return {"pages": 0, "new_posts": 0, "failed": []}
 
@@ -1546,18 +1556,31 @@ def clear_all_posts() -> int:
         conn.close()
 
 
-def get_feed(days: int = 7, limit: int = 100) -> list[dict]:
+def get_feed(days: int = 7, limit: int = 100, market: str | None = None) -> list[dict]:
     conn = get_connection()
     try:
-        rows = conn.execute(
-            """SELECT post_id, page_id, page_name, content, posted_at, url,
-                      images_json, reactions_count, comments_count, processed_at,
-                      summary, stocks_json, overall_sentiment, summariser
-               FROM fb_posts
-               ORDER BY CASE WHEN posted_at='' THEN processed_at ELSE posted_at END DESC
-               LIMIT ?""",
-            (limit,),
-        ).fetchall()
+        if market:
+            rows = conn.execute(
+                """SELECT p.post_id, p.page_id, p.page_name, p.content, p.posted_at, p.url,
+                          p.images_json, p.reactions_count, p.comments_count, p.processed_at,
+                          p.summary, p.stocks_json, p.overall_sentiment, p.summariser
+                   FROM fb_posts p
+                   JOIN fb_pages g ON p.page_id = g.id
+                   WHERE g.market = ?
+                   ORDER BY CASE WHEN p.posted_at='' THEN p.processed_at ELSE p.posted_at END DESC
+                   LIMIT ?""",
+                (market.upper(), limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT post_id, page_id, page_name, content, posted_at, url,
+                          images_json, reactions_count, comments_count, processed_at,
+                          summary, stocks_json, overall_sentiment, summariser
+                   FROM fb_posts
+                   ORDER BY CASE WHEN posted_at='' THEN processed_at ELSE posted_at END DESC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
         out = []
         for r in rows:
             d = dict(r)

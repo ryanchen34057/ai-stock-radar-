@@ -604,11 +604,14 @@ def clear_institutional_cache():
 
 
 @router.get("/news/feed")
-def news_feed(limit: int = Query(default=150, ge=10, le=500)):
+def news_feed(
+    limit: int = Query(default=150, ge=10, le=500),
+    market: str | None = Query(default=None, description="TW or US; omit for global"),
+):
     """Aggregated news feed across all stocks, sorted by date desc."""
     conn = get_connection()
     try:
-        items = get_aggregated_feed(conn, limit=limit)
+        items = get_aggregated_feed(conn, limit=limit, market=market)
         return {"items": items, "count": len(items)}
     finally:
         conn.close()
@@ -652,7 +655,7 @@ def news_refresh_all(skip_fresh_hours: float = Query(default=6.0, ge=0, le=168))
 
 
 @router.post("/news/refresh-one")
-def news_refresh_one():
+def news_refresh_one(market: str | None = Query(default=None)):
     """
     Trickle-feed refresh: scrape news for the single stock with the oldest
     cache entry (or no cache). Cheap — finishes in a couple of seconds.
@@ -660,7 +663,7 @@ def news_refresh_one():
     """
     conn = get_connection()
     try:
-        return refresh_one_stalest(conn)
+        return refresh_one_stalest(conn, market=market)
     except Exception as e:
         logger.error(f"news_refresh_one: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -859,17 +862,20 @@ def save_settings(payload: SettingsPayload):
 class KolChannelPayload(BaseModel):
     url_or_id: str
     name: str | None = None
+    market: str | None = None   # TW or US; defaults to TW server-side
 
 
 @router.get("/kol/channels")
-def kol_list_channels():
-    return kol_service.list_channels()
+def kol_list_channels(market: str | None = Query(default=None)):
+    return kol_service.list_channels(market=market)
 
 
 @router.post("/kol/channels", status_code=201)
 def kol_add_channel(payload: KolChannelPayload):
     try:
-        return kol_service.add_channel(payload.url_or_id, payload.name)
+        return kol_service.add_channel(
+            payload.url_or_id, payload.name, market=payload.market or "TW"
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
@@ -893,14 +899,18 @@ def kol_toggle_channel(channel_id: str, enabled: bool = Query(...)):
 
 
 @router.get("/kol/feed")
-def kol_feed(days: int = Query(default=7, ge=1, le=30)):
-    return {"items": kol_service.get_kol_feed(days=days), "days": days}
+def kol_feed(
+    days: int = Query(default=7, ge=1, le=30),
+    market: str | None = Query(default=None),
+):
+    return {"items": kol_service.get_kol_feed(days=days, market=market), "days": days}
 
 
 @router.post("/kol/refresh")
 def kol_refresh(
     days: int = Query(default=7, ge=1, le=30),
     force: bool = Query(default=False, description="Re-summarise even successful videos"),
+    market: str | None = Query(default=None),
 ):
     """
     Background refresh: fetch recent videos from every enabled KOL channel,
@@ -921,7 +931,9 @@ def kol_refresh(
     def _worker():
         global _kol_refresh_running, _kol_refresh_last_result
         try:
-            _kol_refresh_last_result = kol_service.refresh_all_kol_feeds(days=days, force=force)
+            _kol_refresh_last_result = kol_service.refresh_all_kol_feeds(
+                days=days, force=force, market=market
+            )
         except Exception as e:
             logger.error(f"kol_refresh worker: {e}")
             _kol_refresh_last_result = {"error": str(e)}
@@ -1051,18 +1063,21 @@ def kol_notebooklm_login_status():
 class FbPagePayload(BaseModel):
     url_or_handle: str
     name: str | None = None
+    market: str | None = None   # TW or US; defaults to TW server-side
 
 
 @router.get("/fb/pages")
-def fb_list_pages():
-    return fb_service.list_pages()
+def fb_list_pages(market: str | None = Query(default=None)):
+    return fb_service.list_pages(market=market)
 
 
 @router.post("/fb/pages", status_code=201)
 def fb_add_page(payload: FbPagePayload):
     import sqlite3
     try:
-        return fb_service.add_page(payload.url_or_handle, payload.name)
+        return fb_service.add_page(
+            payload.url_or_handle, payload.name, market=payload.market or "TW"
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except sqlite3.OperationalError as e:
@@ -1089,8 +1104,12 @@ def fb_toggle_page(page_id: str, enabled: bool = Query(...)):
 
 
 @router.get("/fb/feed")
-def fb_get_feed(days: int = Query(default=7, ge=1, le=60), limit: int = Query(default=100, ge=10, le=500)):
-    return {"items": fb_service.get_feed(days=days, limit=limit), "days": days}
+def fb_get_feed(
+    days: int = Query(default=7, ge=1, le=60),
+    limit: int = Query(default=100, ge=10, le=500),
+    market: str | None = Query(default=None),
+):
+    return {"items": fb_service.get_feed(days=days, limit=limit, market=market), "days": days}
 
 
 @router.delete("/fb/posts")
@@ -1127,7 +1146,10 @@ def fb_debug(url: str = Query(...)):
 
 
 @router.post("/fb/refresh")
-def fb_refresh(days: int = Query(default=7, ge=1, le=30)):
+def fb_refresh(
+    days: int = Query(default=7, ge=1, le=30),
+    market: str | None = Query(default=None),
+):
     global _fb_refresh_running, _fb_refresh_started_at, _fb_refresh_last_result
     if not _fb_refresh_lock.acquire(blocking=False):
         return {"status": "already_running", "started_at": _fb_refresh_started_at}
@@ -1140,7 +1162,7 @@ def fb_refresh(days: int = Query(default=7, ge=1, le=30)):
     def _worker():
         global _fb_refresh_running, _fb_refresh_last_result
         try:
-            _fb_refresh_last_result = fb_service.refresh_all_pages(days=days)
+            _fb_refresh_last_result = fb_service.refresh_all_pages(days=days, market=market)
         except Exception as e:
             logger.error(f"fb_refresh worker: {e}")
             _fb_refresh_last_result = {"error": str(e)}

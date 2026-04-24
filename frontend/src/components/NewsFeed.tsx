@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNewsRefreshInterval } from '../hooks/useNewsRefreshInterval';
 import { useOpenStockBySymbol } from '../hooks/useOpenStockBySymbol';
+import { useDashboardStore } from '../store/dashboardStore';
 
 interface NewsItem {
   stock_symbol: string;
@@ -73,6 +74,7 @@ export function NewsFeed() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [refreshIntervalMin] = useNewsRefreshInterval();
   const openStock = useOpenStockBySymbol();
+  const market = useDashboardStore((s) => s.market);
   const [search, setSearch] = useState('');
 
   const [lastUpdateTs, setLastUpdateTs] = useState<number | null>(null);
@@ -92,7 +94,7 @@ export function NewsFeed() {
   // so the UI can show *which* stock just arrived.
   const refreshOne = async (): Promise<{ symbol?: string; name?: string } | null> => {
     try {
-      const r = await fetch('/api/news/refresh-one', { method: 'POST' });
+      const r = await fetch(`/api/news/refresh-one?market=${market}`, { method: 'POST' });
       if (!r.ok) return null;
       return await r.json();
     } catch {
@@ -111,7 +113,7 @@ export function NewsFeed() {
         }
       }
 
-      const r = await fetch('/api/news/feed?limit=500');
+      const r = await fetch(`/api/news/feed?limit=500&market=${market}`);
       const d = await r.json();
       const next: NewsItem[] = d.items ?? [];
 
@@ -147,12 +149,17 @@ export function NewsFeed() {
   // Polling — each tick trickles one stock's news onto the feed (the stock
   // with the stalest cache), matching the "one-at-a-time" refresh model.
   useEffect(() => {
+    // Market switch: wipe the in-memory list so stale TW items don't linger
+    // while the US feed is loading (and vice versa).
+    setItems([]);
+    setLoading(true);
+    prevUrlsRef.current = new Set();
     load({ trickle: true });
     if (refreshIntervalMin <= 0) return; // disabled
     const id = window.setInterval(() => load({ trickle: true }), refreshIntervalMin * 60 * 1000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshIntervalMin]);
+  }, [refreshIntervalMin, market]);
 
   // Keep "X 秒前 / X 分前" label ticking without a full reload
   useEffect(() => {

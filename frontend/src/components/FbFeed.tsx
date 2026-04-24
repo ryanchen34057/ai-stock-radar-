@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useFbFeed, type FbPost, type FbStockMention } from '../hooks/useFbFeed';
 import { useOpenStockBySymbol } from '../hooks/useOpenStockBySymbol';
+import { useDashboardStore } from '../store/dashboardStore';
 
 interface StockMentionAggregate {
   symbol: string;
@@ -57,7 +58,8 @@ function aggregateStockMentions(posts: FbPost[]): StockMentionAggregate[] {
 }
 
 export function FbFeed() {
-  const { items, loading, error, running, refresh } = useFbFeed(7);
+  const market = useDashboardStore((s) => s.market);
+  const { items, loading, error, running, refresh } = useFbFeed(7, market);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(new Set());
   const [statsOpen, setStatsOpen] = useState(true);

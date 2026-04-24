@@ -330,22 +330,36 @@ def _external_links(symbol: str, name: str) -> list[dict]:
 
 # ── Public interface ──────────────────────────────────────────────────────────
 
-def refresh_one_stalest(conn) -> dict:
+def refresh_one_stalest(conn, market: str | None = None) -> dict:
     """
     Scrape MOPS + Google News for the single stock whose cache is oldest
     (or missing entirely). Returns the refreshed stock's metadata.
 
     This is the per-poll refresh unit used by the frontend's trickle feed —
     gentle on external sources and always brings one fresh batch each tick.
+
+    Pass market='TW'|'US' to restrict the trickle to a single market.
     """
     # Prefer stocks with NO cache row at all, then the oldest cached one.
-    row = conn.execute(
-        """SELECT s.symbol, s.name, c.fetched_at
-           FROM stocks s
-           LEFT JOIN news_cache c ON s.symbol = c.symbol
-           ORDER BY (c.fetched_at IS NULL) DESC, c.fetched_at ASC
-           LIMIT 1"""
-    ).fetchone()
+    if market:
+        row = conn.execute(
+            """SELECT s.symbol, s.name, c.fetched_at
+               FROM stocks s
+               LEFT JOIN news_cache c ON s.symbol = c.symbol
+               WHERE s.enabled = 1 AND s.market = ?
+               ORDER BY (c.fetched_at IS NULL) DESC, c.fetched_at ASC
+               LIMIT 1""",
+            (market.upper(),),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """SELECT s.symbol, s.name, c.fetched_at
+               FROM stocks s
+               LEFT JOIN news_cache c ON s.symbol = c.symbol
+               WHERE s.enabled = 1
+               ORDER BY (c.fetched_at IS NULL) DESC, c.fetched_at ASC
+               LIMIT 1"""
+        ).fetchone()
     if not row:
         return {"status": "empty"}
 
@@ -414,16 +428,26 @@ def refresh_all_news(conn, skip_fresh_hours: int = 6, sleep_between: float = 1.0
     return {"refreshed": refreshed, "skipped": skipped}
 
 
-def get_aggregated_feed(conn, limit: int = 150) -> list[dict]:
+def get_aggregated_feed(conn, limit: int = 150, market: str | None = None) -> list[dict]:
     """
     Aggregate all cached news into a single feed sorted by date desc.
     Each item includes the stock symbol + name for context.
+    Pass market='TW' or 'US' to scope the feed to one market.
     """
-    rows = conn.execute(
-        "SELECT s.symbol, s.name, s.sub_category, s.note, s.layer_name, s.tier, "
-        "c.news_json FROM news_cache c "
-        "JOIN stocks s ON s.symbol = c.symbol WHERE s.enabled = 1"
-    ).fetchall()
+    if market:
+        rows = conn.execute(
+            "SELECT s.symbol, s.name, s.sub_category, s.note, s.layer_name, s.tier, "
+            "c.news_json FROM news_cache c "
+            "JOIN stocks s ON s.symbol = c.symbol "
+            "WHERE s.enabled = 1 AND s.market = ?",
+            (market.upper(),),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT s.symbol, s.name, s.sub_category, s.note, s.layer_name, s.tier, "
+            "c.news_json FROM news_cache c "
+            "JOIN stocks s ON s.symbol = c.symbol WHERE s.enabled = 1"
+        ).fetchall()
 
     items: list[dict] = []
     seen_urls: set[str] = set()

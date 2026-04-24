@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNewsRefreshInterval, NEWS_REFRESH_LIMITS } from '../hooks/useNewsRefreshInterval';
 import { useKolChannels } from '../hooks/useKolFeed';
 import { useFbPages } from '../hooks/useFbFeed';
+import { useDashboardStore } from '../store/dashboardStore';
 
 interface KeyStatus {
   configured: boolean;
@@ -328,7 +329,8 @@ export function Settings() {
 }
 
 function KolChannelsPanel() {
-  const { channels, loading, add, remove, toggle } = useKolChannels();
+  const market = useDashboardStore((s) => s.market);
+  const { channels, loading, add, remove, toggle } = useKolChannels(market);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -433,9 +435,16 @@ function KolChannelsPanel() {
   return (
     <div className="bg-card-bg border border-border-c rounded-lg p-5 space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-text-p">理財頻道（YouTube）</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text-p">理財頻道（YouTube）</h3>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/40 font-semibold">
+            {market === 'US' ? '美股' : '台股'}
+          </span>
+        </div>
         <p className="text-xs text-text-t mt-0.5 leading-relaxed">
-          新增要追蹤的財經 YouTuber 頻道。摘要**僅**透過 <span className="text-accent">NotebookLM</span>，
+          新增要追蹤的財經 YouTuber 頻道（目前設定只影響<span className="text-accent">
+            {market === 'US' ? '美股儀表板' : '台股儀表板'}</span>）。
+          摘要**僅**透過 <span className="text-accent">NotebookLM</span>，
           請先完成下方的 NotebookLM 登入；每支影片約 2–3 分鐘，產出 3 句話總結 + 提及個股 + 看多/看空判斷。
         </p>
         {nblm && (
@@ -572,7 +581,8 @@ function KolChannelsPanel() {
 // ── Facebook pages panel ─────────────────────────────────────────────────────
 
 function FbPagesPanel() {
-  const { pages, add, remove, toggle, loading } = useFbPages();
+  const market = useDashboardStore((s) => s.market);
+  const { pages, add, remove, toggle, loading } = useFbPages(market);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -648,9 +658,16 @@ function FbPagesPanel() {
   return (
     <div className="bg-card-bg border border-border-c rounded-lg p-5 space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-text-p">理財粉專（Facebook）</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text-p">理財粉專（Facebook）</h3>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/40 font-semibold">
+            {market === 'US' ? '美股' : '台股'}
+          </span>
+        </div>
         <p className="text-xs text-text-t mt-0.5 leading-relaxed">
-          新增要追蹤的 Facebook 粉絲專頁或個人專頁。以 Playwright 用你登入的 FB cookie 抓取近期貼文；
+          新增要追蹤的 Facebook 粉絲專頁或個人專頁（目前設定只影響<span className="text-accent">
+            {market === 'US' ? '美股儀表板' : '台股儀表板'}</span>）。
+          以 Playwright 用你登入的 FB cookie 抓取近期貼文；
           僅限本機個人使用，FB ToS 禁止公開部署此類自動化。
         </p>
         {auth && (

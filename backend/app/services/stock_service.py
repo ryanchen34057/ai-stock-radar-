@@ -31,26 +31,55 @@ def _finite(v):
 
 logger = logging.getLogger(__name__)
 
-STOCKS_JSON = Path(__file__).parent.parent.parent / "data" / "stocks.json"
+_DATA_ROOT = Path(__file__).parent.parent.parent / "data"
+STOCKS_JSON = _DATA_ROOT / "stocks.json"            # TW (legacy name)
+STOCKS_US_JSON = _DATA_ROOT / "stocks_us.json"      # US
 
 
-def load_stocks_json() -> list[dict]:
+def load_stocks_json(market: str | None = None) -> list[dict]:
+    """Load stocks from disk. market=None returns TW (backwards-compat default).
+
+    market='TW' / 'US' returns the corresponding file. Each record is tagged
+    with its market so downstream code can dispatch (yfinance suffix,
+    Taiwan-only services, etc.).
+    """
+    if market == "US":
+        if not STOCKS_US_JSON.exists():
+            return []
+        with open(STOCKS_US_JSON, encoding="utf-8") as f:
+            data = json.load(f)
+        for s in data:
+            s.setdefault("market", "US")
+        return data
+    # default: TW
     with open(STOCKS_JSON, encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+    for s in data:
+        s.setdefault("market", "TW")
+    return data
 
 
 def seed_stocks_table():
-    """Insert stocks from stocks.json into DB if not present, update metadata fields."""
-    stocks = load_stocks_json()
+    """Seed `stocks` table from stocks.json (TW) and stocks_us.json (US).
+
+    Existing rows get metadata refreshed in-place except user-editable flags
+    (enabled). For the 6.9k US symbols, `enabled` defaults to 0 — the user
+    cherry-picks which to track via the Settings UI.
+    """
+    tw = load_stocks_json("TW")
+    us = load_stocks_json("US")
+    stocks = tw + us
     conn = get_connection()
     try:
         for s in stocks:
             conn.execute(
                 """INSERT OR IGNORE INTO stocks
-                   (symbol, name, layer, layer_name, sub_category, note, theme, themes,
-                    industry_role, secondary_layers, tier, enabled)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (s["symbol"], s["name"], s["layer"], s["layer_name"],
+                   (symbol, name, market, exchange, layer, layer_name, sub_category,
+                    note, theme, themes, industry_role, secondary_layers, tier, enabled)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (s["symbol"], s["name"],
+                 s.get("market", "TW"), s.get("exchange"),
+                 s.get("layer", 0), s.get("layer_name", ""),
                  s.get("sub_category"), s.get("note"),
                  s.get("theme", "A"),
                  json.dumps(s["themes"]) if s.get("themes") else None,
@@ -59,16 +88,16 @@ def seed_stocks_table():
                  int(s.get("tier", 2)),
                  1 if s.get("enabled", True) else 0)
             )
-        # For stocks already in DB, refresh everything except user-editable
-        # flags (enabled) — so spec updates flow through without overwriting
-        # the user's disable choices.
+        # Refresh mutable metadata (not enabled — users curate that).
         for s in stocks:
             conn.execute(
                 """UPDATE stocks SET
-                     name=?, layer=?, layer_name=?, sub_category=?, note=?,
+                     name=?, market=?, exchange=?, layer=?, layer_name=?,
+                     sub_category=?, note=?,
                      theme=?, themes=?, industry_role=?, secondary_layers=?, tier=?
                    WHERE symbol=?""",
-                (s["name"], s["layer"], s["layer_name"],
+                (s["name"], s.get("market", "TW"), s.get("exchange"),
+                 s.get("layer", 0), s.get("layer_name", ""),
                  s.get("sub_category"), s.get("note"),
                  s.get("theme", "A"),
                  json.dumps(s["themes"]) if s.get("themes") else None,
@@ -78,14 +107,24 @@ def seed_stocks_table():
                  s["symbol"])
             )
         conn.commit()
-        logger.info(f"Seeded {len(stocks)} stocks")
+        logger.info(f"Seeded {len(tw)} TW + {len(us)} US stocks")
     finally:
         conn.close()
 
 
-def fetch_yfinance(symbol: str, period: str = "5y") -> tuple[pd.DataFrame | None, dict]:
-    """Try .TW then .TWO suffix with retry on rate-limit errors."""
-    suffixes = [".TW", ".TWO"]
+def _yf_suffixes(market: str) -> list[str]:
+    """yfinance ticker suffixes by market. US tickers have no suffix."""
+    if market == "US":
+        return [""]
+    return [".TW", ".TWO"]
+
+
+def fetch_yfinance(symbol: str, period: str = "5y", market: str = "TW") -> tuple[pd.DataFrame | None, dict]:
+    """Try market-appropriate ticker suffix(es) with retry on rate-limit errors.
+
+    market='TW' tries .TW then .TWO. market='US' uses the symbol as-is.
+    """
+    suffixes = _yf_suffixes(market)
     max_retries = 3
 
     for suffix in suffixes:
@@ -110,7 +149,7 @@ def fetch_yfinance(symbol: str, period: str = "5y") -> tuple[pd.DataFrame | None
                 logger.warning(f"  {symbol}{suffix} attempt {attempt+1} failed: {e} — retry in {wait:.1f}s")
                 time.sleep(wait)
 
-    logger.warning(f"✗ {symbol}: no data from .TW or .TWO")
+    logger.warning(f"✗ {symbol}: no data")
     return None, {}
 
 
@@ -180,38 +219,44 @@ def calculate_ma(closes: list[float], period: int) -> float | None:
     return round(sum(closes[-period:]) / period, 2)
 
 
-def get_dashboard_data() -> dict:
-    """Build full dashboard response from DB."""
-    # Pull current disposal list (date-filtered) once for this request
-    try:
-        from app.services.disposal_service import get_active_disposal_map
-        disposal_map = get_active_disposal_map()
-    except Exception as e:
-        logger.warning(f"disposal map unavailable: {e}")
-        disposal_map = {}
+def get_dashboard_data(market: str = "TW") -> dict:
+    """Build full dashboard response from DB, filtered to a single market.
 
-    # Intraday live quotes from TWSE MIS (populated every 5 min by the
-    # scheduler during market hours). Falls back to latest kline close when
-    # no live quote is available.
-    try:
-        from app.services.twse_mis_service import get_all_quotes
-        live_quotes = get_all_quotes()
-    except Exception as e:
-        logger.warning(f"live quotes unavailable: {e}")
-        live_quotes = {}
+    Taiwan-only data sources (TWSE disposal list, MIS live quotes, TDCC
+    shareholding) are skipped when market='US'.
+    """
+    market = (market or "TW").upper()
+    is_tw = market == "TW"
 
-    # TDCC 千張大戶 latest week + WoW change per tracked symbol
-    try:
-        from app.services.shareholding_service import get_latest_per_symbol
-        big_holder_map = get_latest_per_symbol()
-    except Exception as e:
-        logger.warning(f"shareholding unavailable: {e}")
-        big_holder_map = {}
+    # Taiwan-only auxiliary data
+    disposal_map: dict = {}
+    live_quotes: dict = {}
+    big_holder_map: dict = {}
+
+    if is_tw:
+        try:
+            from app.services.disposal_service import get_active_disposal_map
+            disposal_map = get_active_disposal_map()
+        except Exception as e:
+            logger.warning(f"disposal map unavailable: {e}")
+
+        try:
+            from app.services.twse_mis_service import get_all_quotes
+            live_quotes = get_all_quotes()
+        except Exception as e:
+            logger.warning(f"live quotes unavailable: {e}")
+
+        try:
+            from app.services.shareholding_service import get_latest_per_symbol
+            big_holder_map = get_latest_per_symbol()
+        except Exception as e:
+            logger.warning(f"shareholding unavailable: {e}")
 
     conn = get_connection()
     try:
         stocks_rows = conn.execute(
-            "SELECT * FROM stocks WHERE enabled = 1 ORDER BY layer, symbol"
+            "SELECT * FROM stocks WHERE enabled = 1 AND market = ? ORDER BY layer, symbol",
+            (market,)
         ).fetchall()
 
         # Preload EPS for all symbols (cheaper than per-stock queries)
@@ -383,9 +428,14 @@ def fetch_missing_klines(period: str = "5y", min_rows: int = 1):
     >= 30 days of history (useful for forced backfill).
     """
     from datetime import datetime as _dt, timedelta as _td
-    stocks = load_stocks_json()
+    # Only consider enabled stocks — disabled US symbols (6.9k+) are seeded as
+    # inert lookup targets; the user opts them in via the UI.
     conn = get_connection()
     try:
+        stock_rows = conn.execute(
+            "SELECT symbol, name, market FROM stocks WHERE enabled = 1"
+        ).fetchall()
+        stocks = [dict(r) for r in stock_rows]
         rows = conn.execute(
             "SELECT symbol, COUNT(*), MIN(date) FROM klines GROUP BY symbol"
         ).fetchall()
@@ -437,7 +487,7 @@ def fetch_missing_klines(period: str = "5y", min_rows: int = 1):
         current = counts.get(symbol, 0)
         logger.info(f"  [{i+1}/{len(targets)}] {symbol} {s['name']} (current: {current} rows)")
         try:
-            df, info = fetch_yfinance(symbol, period)
+            df, info = fetch_yfinance(symbol, period, market=s.get("market", "TW"))
             if df is not None and not df.empty:
                 upsert_klines(symbol, df)
                 upsert_metadata(symbol, info)
@@ -453,9 +503,9 @@ def fetch_missing_klines(period: str = "5y", min_rows: int = 1):
     return {"targets": len(targets), "success": success, "failed": failed}
 
 
-def fetch_yfinance_range(symbol: str, start: str, end: str) -> tuple[pd.DataFrame | None, dict]:
-    """Fetch klines in [start, end). Tries .TW then .TWO, with rate-limit retry."""
-    suffixes = [".TW", ".TWO"]
+def fetch_yfinance_range(symbol: str, start: str, end: str, market: str = "TW") -> tuple[pd.DataFrame | None, dict]:
+    """Fetch klines in [start, end). Uses market-appropriate suffix(es)."""
+    suffixes = _yf_suffixes(market)
     max_retries = 3
     for suffix in suffixes:
         for attempt in range(max_retries):
@@ -500,9 +550,12 @@ def ensure_klines_current(backfill_period: str = "5y"):
         latest_trading -= _td(days=1)
     target_str = latest_trading.strftime("%Y-%m-%d")
 
-    stocks = load_stocks_json()
     conn = get_connection()
     try:
+        stock_rows = conn.execute(
+            "SELECT symbol, name, market FROM stocks WHERE enabled = 1"
+        ).fetchall()
+        stocks = [dict(r) for r in stock_rows]
         rows = conn.execute(
             "SELECT symbol, MAX(date) FROM klines GROUP BY symbol"
         ).fetchall()
@@ -542,11 +595,12 @@ def ensure_klines_current(backfill_period: str = "5y"):
         s, last = item
         symbol = s["symbol"]
         try:
+            mk = s.get("market", "TW")
             if last:
                 start_str = (_dt.strptime(last, "%Y-%m-%d").date() + _td(days=1)).strftime("%Y-%m-%d")
-                df, info = fetch_yfinance_range(symbol, start_str, end_str)
+                df, info = fetch_yfinance_range(symbol, start_str, end_str, market=mk)
             else:
-                df, info = fetch_yfinance(symbol, backfill_period)
+                df, info = fetch_yfinance(symbol, backfill_period, market=mk)
 
             if df is not None and not df.empty:
                 upsert_klines(symbol, df)
@@ -679,9 +733,13 @@ def ensure_eps_current():
     current_year = _dt.now(pytz.timezone("Asia/Taipei")).year
     threshold = current_year - 1
 
-    stocks = load_stocks_json()
+    # EPS source is FinMind (TW-only) — restrict to enabled TW stocks.
     conn = get_connection()
     try:
+        stock_rows = conn.execute(
+            "SELECT symbol, name FROM stocks WHERE enabled = 1 AND market = 'TW'"
+        ).fetchall()
+        stocks = [dict(r) for r in stock_rows]
         rows = conn.execute(
             "SELECT symbol, MAX(year) FROM eps_annual GROUP BY symbol"
         ).fetchall()
@@ -813,8 +871,19 @@ def fetch_logos_from_tradingview() -> dict:
 
 
 def update_all_stocks(period: str = "5y"):
-    """Fetch all stocks from yfinance and update DB. Used for init and daily update."""
-    stocks = load_stocks_json()
+    """Fetch all enabled stocks from yfinance and update DB.
+
+    Loads from DB (enabled=1) rather than stocks.json so the US market's
+    user-curated subset also gets refreshed on the nightly schedule.
+    """
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT symbol, name, market FROM stocks WHERE enabled = 1"
+        ).fetchall()
+        stocks = [dict(r) for r in rows]
+    finally:
+        conn.close()
     success = 0
     failed = []
 
@@ -822,7 +891,7 @@ def update_all_stocks(period: str = "5y"):
         symbol = s["symbol"]
         logger.info(f"[{i+1}/{len(stocks)}] Fetching {symbol} {s['name']}")
         try:
-            df, info = fetch_yfinance(symbol, period)
+            df, info = fetch_yfinance(symbol, period, market=s.get("market", "TW"))
             if df is not None and not df.empty:
                 upsert_klines(symbol, df)
                 upsert_metadata(symbol, info)

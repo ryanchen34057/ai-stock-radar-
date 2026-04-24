@@ -66,7 +66,7 @@ export function SetupOverlay() {
           <div className="text-3xl">🛰️</div>
           <div className="flex-1">
             <h2 className="text-lg font-bold text-text-p">
-              AI 產業鏈股票雷達 · 首次啟動
+              股票儀表板 · 首次啟動
             </h2>
             <p className="text-xs text-text-s mt-0.5">
               正在抓取所有股票的歷史資料 — 只會在第一次跑，之後打開就直接可用

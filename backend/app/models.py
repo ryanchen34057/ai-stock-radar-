@@ -14,6 +14,8 @@ class KLineData(BaseModel):
 class StockResponse(BaseModel):
     symbol: str
     name: str
+    market: str = "TW"
+    exchange: Optional[str] = None
     layer: int
     layer_name: str
     sub_category: Optional[str] = None

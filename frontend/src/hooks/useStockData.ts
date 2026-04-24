@@ -4,7 +4,7 @@ import { useDashboardStore } from '../store/dashboardStore';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export function useStockData() {
-  const { setStocks, setLoading, setError, lastFetchTime } = useDashboardStore();
+  const { setStocks, setLoading, setError, lastFetchTime, market } = useDashboardStore();
 
   const fetchData = useCallback(async (force = false) => {
     // Use cache if recent enough
@@ -16,7 +16,7 @@ export function useStockData() {
     setError(null);
 
     try {
-      const res = await fetch('/api/dashboard');
+      const res = await fetch(`/api/dashboard?market=${market}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setStocks(data.stocks, data.last_updated);
@@ -25,7 +25,7 @@ export function useStockData() {
     } finally {
       setLoading(false);
     }
-  }, [setStocks, setLoading, setError, lastFetchTime]);
+  }, [setStocks, setLoading, setError, lastFetchTime, market]);
 
   const refresh = useCallback(() => fetchData(true), [fetchData]);
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { LAYER_NAMES, LAYER_THEME, layerShortCode } from '../types/stock';
+import { useDashboardStore } from '../store/dashboardStore';
 
 interface ManagedStock {
   symbol: string;
@@ -32,17 +33,19 @@ export function StockManager({ onClose }: Props) {
   const [editing, setEditing] = useState<ManagedStock | null>(null);
   const [creating, setCreating] = useState(false);
 
+  const market = useDashboardStore((s) => s.market);
+
   const load = async () => {
     setLoading(true);
     try {
-      const r = await fetch('/api/stocks');
+      const r = await fetch(`/api/stocks?market=${market}`);
       setStocks(await r.json());
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [market]);
   // ESC closes
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };

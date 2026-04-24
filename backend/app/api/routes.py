@@ -11,6 +11,7 @@ from app.services import indices_service
 from app.database import get_connection
 from datetime import datetime, timezone
 from pydantic import BaseModel
+import json
 import logging
 import os
 import threading
@@ -75,19 +76,30 @@ def _mask(key: str) -> str:
 
 
 @router.get("/stocks")
-def list_stocks(include_disabled: bool = Query(default=True)):
-    """
-    List all stocks with management-relevant fields (tier, enabled, themes).
-    Used by the stock management UI.
+def list_stocks(
+    include_disabled: bool = Query(default=True),
+    market: str | None = Query(default=None, description="TW or US; omit for all"),
+):
+    """List stocks with management-relevant fields.
+
+    `market` filters by TW or US. Settings UI passes it to page between
+    the per-market stock managers.
     """
     conn = get_connection()
     try:
-        sql = ("SELECT symbol, name, layer, layer_name, sub_category, note, theme, themes, "
-               "tier, enabled, created_at, updated_at FROM stocks")
+        sql = ("SELECT symbol, name, market, exchange, layer, layer_name, sub_category, note, "
+               "theme, themes, tier, enabled, created_at, updated_at FROM stocks")
+        where: list[str] = []
+        params: list = []
         if not include_disabled:
-            sql += " WHERE enabled = 1"
+            where.append("enabled = 1")
+        if market:
+            where.append("market = ?")
+            params.append(market.upper())
+        if where:
+            sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY theme, layer, symbol"
-        rows = conn.execute(sql).fetchall()
+        rows = conn.execute(sql, params).fetchall()
         out = []
         for r in rows:
             d = dict(r)
@@ -106,7 +118,7 @@ def list_stocks(include_disabled: bool = Query(default=True)):
 class StockPayload(BaseModel):
     symbol: str
     name: str
-    layer: int
+    layer: int = 0
     layer_name: str | None = None  # auto-filled from layer mapping if blank
     sub_category: str | None = None
     note: str | None = None
@@ -114,6 +126,8 @@ class StockPayload(BaseModel):
     tier: int = 2
     enabled: bool = True
     secondary_layers: list[int] | None = None
+    market: str = "TW"
+    exchange: str | None = None
 
 
 # Canonical layer → (display num, name, theme) — mirrors frontend LAYER_META
@@ -157,10 +171,12 @@ def create_stock(payload: StockPayload):
             raise HTTPException(status_code=409, detail=f"Stock {payload.symbol} already exists")
         conn.execute(
             """INSERT INTO stocks
-               (symbol, name, layer, layer_name, sub_category, note, theme, themes,
-                secondary_layers, tier, enabled, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (payload.symbol, payload.name, payload.layer, layer_name,
+               (symbol, name, market, exchange, layer, layer_name, sub_category, note,
+                theme, themes, secondary_layers, tier, enabled, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (payload.symbol, payload.name,
+             (payload.market or "TW").upper(), payload.exchange,
+             payload.layer, layer_name,
              payload.sub_category, payload.note, theme, None,
              json.dumps(payload.secondary_layers) if payload.secondary_layers else None,
              payload.tier, 1 if payload.enabled else 0, now, now),
@@ -172,7 +188,7 @@ def create_stock(payload: StockPayload):
     # Background fetch: klines + metadata (tolerant of failures)
     def _fetch_bg():
         try:
-            df, info = fetch_yfinance(payload.symbol, "5y")
+            df, info = fetch_yfinance(payload.symbol, "5y", market=(payload.market or "TW").upper())
             if df is not None and not df.empty:
                 upsert_klines(payload.symbol, df)
                 if info:
@@ -298,9 +314,9 @@ def get_klines(symbol: str, days: int = Query(default=1300, ge=1, le=1300)):
 
 
 @router.get("/dashboard")
-def get_dashboard():
+def get_dashboard(market: str = Query(default="TW", description="TW or US")):
     try:
-        return get_dashboard_data()
+        return get_dashboard_data(market=market.upper())
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -335,7 +351,7 @@ def refresh_data(full: bool = False):
 @router.post("/cleanup-orphans")
 def cleanup_orphans():
     """Remove stocks from DB that are no longer in stocks.json (e.g. fixed typos)."""
-    current = {s["symbol"] for s in load_stocks_json()}
+    current = {s["symbol"] for s in load_stocks_json("TW") + load_stocks_json("US")}
     conn = get_connection()
     try:
         db_syms = {row[0] for row in conn.execute("SELECT symbol FROM stocks").fetchall()}
@@ -386,8 +402,14 @@ _refetch_lock = threading.Lock()
 
 def _refetch_one_bg(symbol: str, period: str = "5y"):
     from app.services.stock_service import fetch_yfinance, upsert_klines, upsert_metadata
+    conn = get_connection()
     try:
-        df, info = fetch_yfinance(symbol, period)
+        row = conn.execute("SELECT market FROM stocks WHERE symbol=?", (symbol,)).fetchone()
+        market = (row["market"] if row else "TW") or "TW"
+    finally:
+        conn.close()
+    try:
+        df, info = fetch_yfinance(symbol, period, market=market)
         if df is not None and not df.empty:
             upsert_klines(symbol, df)
             if info:

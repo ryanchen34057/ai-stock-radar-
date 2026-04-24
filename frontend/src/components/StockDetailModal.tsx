@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import type { StockData, KLine, MAPeriod } from '../types/stock';
 import { calculateMAFull } from '../utils/calcMA';
@@ -12,6 +12,7 @@ import type { MopsAnnouncement, NewsItem, ExternalLink } from '../hooks/useStock
 import PeTooltip from './PeTooltip';
 import { getDisplayPe } from '../utils/formatPe';
 import CapacitySection from './CapacitySection';
+import { analyzeAllConditions, TONE_CLASS } from '../utils/technicalConditions';
 
 const MA_COLORS: Record<number, string> = {
   5: '#58A6FF',
@@ -290,6 +291,16 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
 
   const isUp = (stock.change ?? 0) >= 0;
 
+  // Use the longer full-history klines once loaded so 碗型態 / BB 120 日百分位
+  // 等長 window 條件能算得出結果；fallback 到 stock.klines 避免空白期。
+  const conditions = useMemo(
+    () => analyzeAllConditions({
+      ...stock,
+      klines: fullKlines.length > 0 ? fullKlines : stock.klines,
+    }),
+    [stock, fullKlines],
+  );
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
@@ -363,8 +374,31 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
           </div>
         </div>
 
-        {/* Institutional section — split cards (20d vs latest) + click to expand daily */}
-        <InstitutionalSection symbol={stock.symbol} />
+        {/* Triggered technical-analysis conditions — same logic as ControlBar filters */}
+        {conditions.length > 0 && (
+          <div className="px-4 py-3 border-b border-border-c">
+            <div className="flex items-baseline gap-2 mb-2">
+              <h3 className="text-sm font-semibold text-text-p">技術條件</h3>
+              <span className="text-[11px] text-text-t">
+                目前觸發 {conditions.length} 項（滑過看細節）
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {conditions.map((c) => (
+                <span
+                  key={c.key}
+                  title={c.detail}
+                  className={`px-2 py-0.5 text-xs rounded border font-medium ${TONE_CLASS[c.tone]}`}
+                >
+                  {c.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Institutional section — TW only (三大法人 / 融資融券 from TWSE / TPEx) */}
+        {stock.market !== 'US' && <InstitutionalSection symbol={stock.symbol} />}
 
 
         {/* Chart */}

@@ -39,7 +39,7 @@ export function OnboardingGuide() {
         <div className="p-5 border-b border-border-c flex items-start gap-3">
           <div className="text-3xl">🛰️</div>
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-text-p">歡迎使用 AI 產業鏈股票雷達</h2>
+            <h2 className="text-xl font-bold text-text-p">歡迎使用股票儀表板</h2>
             <p className="text-sm text-text-s mt-1">
               📊 股票資料與三大法人等功能 <strong className="text-accent">不用任何設定</strong>，開箱即用。
               以下幾個進階功能需要各自申請 API 才能啟用：

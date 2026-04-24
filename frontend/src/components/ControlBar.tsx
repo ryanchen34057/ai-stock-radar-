@@ -192,14 +192,34 @@ export function ControlBar() {
   const anyKD = Object.values(kdFilters).some(Boolean);
 
   const [managerOpen, setManagerOpen] = useState(false);
+  const market = useDashboardStore((s) => s.market);
 
-  const THEME_BTNS: { val: ThemeFilter; label: string; icon: string }[] = [
-    { val: 'all',   label: '全部',          icon: '🔀' },
-    { val: 'A',     label: 'AI 產業鏈',     icon: '🎯' },
-    { val: 'B',     label: '電動車',        icon: '🚗' },
-    { val: 'C',     label: '機器人',        icon: '🤖' },
-    { val: 'cross', label: '跨主題精選',    icon: '⭐' },
-  ];
+  // Theme buttons per market. Taiwan uses the custom 3-theme taxonomy (AI/EV/
+  // Robotics). US uses GICS 11 sectors — shown as a horizontal sector strip so
+  // the user can quickly see where capital is flowing by industry.
+  const THEME_BTNS: { val: ThemeFilter; label: string; icon: string }[] =
+    market === 'US'
+      ? [
+          { val: 'all', label: '全部',        icon: '🔀' },
+          { val: 'IT',  label: '資訊科技',    icon: '💻' },
+          { val: 'HC',  label: '醫療保健',    icon: '🏥' },
+          { val: 'FN',  label: '金融',        icon: '💰' },
+          { val: 'CD',  label: '非必需消費',  icon: '🛍️' },
+          { val: 'CS',  label: '必需消費',    icon: '🛒' },
+          { val: 'CM',  label: '通訊服務',    icon: '📡' },
+          { val: 'IN',  label: '工業',        icon: '🏗️' },
+          { val: 'EN',  label: '能源',        icon: '⚡' },
+          { val: 'MT',  label: '原物料',      icon: '🧱' },
+          { val: 'UT',  label: '公用事業',    icon: '🔌' },
+          { val: 'RE',  label: '房地產',      icon: '🏢' },
+        ]
+      : [
+          { val: 'all',   label: '全部',          icon: '🔀' },
+          { val: 'A',     label: 'AI 產業鏈',     icon: '🎯' },
+          { val: 'B',     label: '電動車',        icon: '🚗' },
+          { val: 'C',     label: '機器人',        icon: '🤖' },
+          { val: 'cross', label: '跨主題精選',    icon: '⭐' },
+        ];
 
   return (
     <div className="bg-card-bg border-b border-border-c px-4 py-3 space-y-2.5">

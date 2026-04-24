@@ -11,7 +11,7 @@ import { SetupOverlay } from './components/SetupOverlay';
 import { OnboardingGuide } from './components/OnboardingGuide';
 import { usePanelLayout, usePanelVisibility, type PanelId } from './hooks/usePanelLayout';
 
-type Tab = 'dashboard' | 'settings';
+type Tab = 'dashboard-tw' | 'dashboard-us' | 'settings';
 
 interface PanelDescriptor {
   id: PanelId;
@@ -25,7 +25,13 @@ export default function App() {
   const selectedStock = useDashboardStore((s) => s.selectedStock);
   const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
   const selectedMA = useDashboardStore((s) => s.selectedMA);
-  const [tab, setTab] = useState<Tab>('dashboard');
+  const [tab, setTab] = useState<Tab>('dashboard-tw');
+  const setMarket = useDashboardStore((s) => s.setMarket);
+
+  useEffect(() => {
+    if (tab === 'dashboard-tw') setMarket('TW');
+    else if (tab === 'dashboard-us') setMarket('US');
+  }, [tab, setMarket]);
   const kol = usePanelLayout('kol');
   const news = usePanelLayout('news');
   const fb = usePanelLayout('fb');
@@ -53,13 +59,14 @@ export default function App() {
     <div className="h-screen bg-dash-bg flex flex-col overflow-hidden">
       {/* Global tab bar */}
       <nav className="flex items-center gap-0 border-b border-border-c bg-card-bg px-4 flex-shrink-0">
-        <TabButton active={tab === 'dashboard'} onClick={() => setTab('dashboard')}>📊 儀表板</TabButton>
+        <TabButton active={tab === 'dashboard-tw'} onClick={() => setTab('dashboard-tw')}>📊 台股儀表板</TabButton>
+        <TabButton active={tab === 'dashboard-us'} onClick={() => setTab('dashboard-us')}>📊 美股儀表板</TabButton>
         <TabButton active={tab === 'settings'}  onClick={() => setTab('settings')}>⚙ 設定</TabButton>
         <div className="ml-auto flex items-center gap-1.5">
           <RefetchAllButton />
           <PanelToggles />
           <span className="text-xs text-text-t pl-2 pr-1 hidden sm:inline">
-            AI 產業鏈股票雷達
+            股票儀表板
           </span>
         </div>
       </nav>
@@ -73,7 +80,7 @@ export default function App() {
         {/* Center flex-1 — responsively resizes when dock widths change */}
         <div className="flex-1 min-w-0 min-h-0 relative">
           <div className="absolute inset-0 overflow-y-auto">
-            {tab === 'dashboard' && <Dashboard />}
+            {(tab === 'dashboard-tw' || tab === 'dashboard-us') && <Dashboard />}
             {tab === 'settings'  && <Settings />}
           </div>
 

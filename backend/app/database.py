@@ -43,8 +43,10 @@ def init_schema():
             CREATE TABLE IF NOT EXISTS stocks (
                 symbol TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                layer INTEGER NOT NULL,
-                layer_name TEXT NOT NULL,
+                market TEXT NOT NULL DEFAULT 'TW',
+                exchange TEXT DEFAULT NULL,
+                layer INTEGER NOT NULL DEFAULT 0,
+                layer_name TEXT NOT NULL DEFAULT '',
                 sub_category TEXT,
                 note TEXT,
                 theme TEXT NOT NULL DEFAULT 'A',
@@ -57,6 +59,7 @@ def init_schema():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE INDEX IF NOT EXISTS idx_stocks_market ON stocks(market);
 
             CREATE TABLE IF NOT EXISTS klines (
                 symbol TEXT,
@@ -309,6 +312,13 @@ def init_schema():
             conn.commit()
         if "updated_at" not in existing_stock_cols:
             conn.execute("ALTER TABLE stocks ADD COLUMN updated_at TEXT")
+            conn.commit()
+        if "market" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN market TEXT NOT NULL DEFAULT 'TW'")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_stocks_market ON stocks(market)")
+            conn.commit()
+        if "exchange" not in existing_stock_cols:
+            conn.execute("ALTER TABLE stocks ADD COLUMN exchange TEXT DEFAULT NULL")
             conn.commit()
         existing_kol_cols = {row[1] for row in conn.execute("PRAGMA table_info(kol_videos)").fetchall()}
         if existing_kol_cols and "summariser" not in existing_kol_cols:

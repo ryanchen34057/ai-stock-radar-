@@ -10,7 +10,7 @@ import { MarketIndices } from './MarketIndices';
 
 export function Dashboard() {
   const {
-    stocks, loading, error,
+    market, stocks, loading, error,
     selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, candleFilter, specialFilters, instiFilters,
     priceFilter, peFilter, kdFilters,
     themeFilter, tierFilter, searchQuery,
@@ -19,20 +19,20 @@ export function Dashboard() {
   const { fetchData, refresh } = useStockData();
   useKeyboardShortcuts();
 
+  // Refetch whenever the selected market changes, and auto-refresh every 60s
+  // so intraday prices surface without a manual reload.
   useEffect(() => {
-    fetchData();
-    // Auto-refresh every 60s so intraday MIS prices surface without a manual
-    // reload. refresh() bypasses the 5-min TTL cache.
+    fetchData(true);
     const id = window.setInterval(() => refresh(), 60_000);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [market]);
 
   return (
     <div className="bg-dash-bg text-text-p">
       <MarketIndices />
       <ControlBar />
-      <BusinessCycle />
+      {market === 'TW' && <BusinessCycle />}
 
       <div className="px-4 py-4">
         {/* Error */}

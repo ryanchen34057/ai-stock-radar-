@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, CandleFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 
+export type Market = 'TW' | 'US';
+
 interface DashboardState {
   // Data
+  market: Market;
   stocks: StockData[];
   lastUpdated: string | null;
   loading: boolean;
@@ -40,6 +43,7 @@ interface DashboardState {
   selectedStock: StockData | null;
 
   // Actions
+  setMarket: (market: Market) => void;
   setStocks: (stocks: StockData[], lastUpdated: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -104,6 +108,7 @@ const DEFAULT_KD: KDFilters = {
 };
 
 export const useDashboardStore = create<DashboardState>((set) => ({
+  market: 'TW',
   stocks: [],
   lastUpdated: null,
   loading: false,
@@ -134,6 +139,8 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   bbVisible: { upper: true, middle: true, lower: true },
   selectedStock: null,
 
+  setMarket: (market) =>
+    set({ market, stocks: [], lastUpdated: null, lastFetchTime: null, error: null, selectedLayers: [] }),
   setStocks: (stocks, lastUpdated) =>
     set({ stocks, lastUpdated, lastFetchTime: Date.now(), error: null }),
   setLoading: (loading) => set({ loading }),

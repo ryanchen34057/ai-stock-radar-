@@ -19,6 +19,8 @@ export interface MAValues {
 export interface StockData {
   symbol: string;
   name: string;
+  market?: 'TW' | 'US';
+  exchange?: string | null;
   layer: number;
   layer_name: string;
   sub_category: string | null;
@@ -78,7 +80,13 @@ export interface StockData {
   } | null;
 }
 
-export type ThemeFilter = 'A' | 'B' | 'C' | 'all' | 'cross';
+export type ThemeFilter =
+  // Taiwan themes
+  | 'A' | 'B' | 'C'
+  // US GICS 11 sectors
+  | 'IT' | 'HC' | 'FN' | 'CD' | 'CS' | 'CM' | 'IN' | 'EN' | 'MT' | 'UT' | 'RE'
+  // Cross-cutting
+  | 'all' | 'cross';
 export type TierFilter = 1 | 2 | 3; // 1=僅 T1, 2=T1+T2, 3=全部
 
 export interface EpsAnnualRow {
@@ -244,6 +252,7 @@ export interface KDFilters {
 }
 
 export const LAYER_NAMES: Record<number, string> = {
+  // ── Taiwan market (layers 1-26) ────────────────────────────────────────
   // Theme A (ids 1-10, plus 16-19 and 25-26 for later layers that would
   // otherwise collide with Theme B/C ids)
   1: '晶片設計與製造', 2: '化合物半導體', 3: '記憶體',
@@ -259,19 +268,42 @@ export const LAYER_NAMES: Record<number, string> = {
   11: '電池材料', 12: '三電傳動', 13: '車用線束', 14: '車燈光學', 15: '充電基建',
   // Theme C
   21: '減速機傳動', 22: '伺服馬達', 23: '機電整合', 24: '感測末端',
+
+  // ── US market (layers 101-111, GICS 11 sectors) ────────────────────────
+  101: '資訊科技',    102: '醫療保健',    103: '金融',
+  104: '非必需消費',  105: '必需消費',    106: '通訊服務',
+  107: '工業',        108: '能源',        109: '原物料',
+  110: '公用事業',    111: '房地產',
 };
 
 export const THEME_LABELS: Record<string, string> = {
+  // Taiwan
   A: 'AI 伺服器',
   B: '電動車',
   C: '機器人',
+  // US (GICS 11 sectors — 2-letter codes to avoid collision with A/B/C)
+  IT: '資訊科技',
+  HC: '醫療保健',
+  FN: '金融',
+  CD: '非必需消費',
+  CS: '必需消費',
+  CM: '通訊服務',
+  IN: '工業',
+  EN: '能源',
+  MT: '原物料',
+  UT: '公用事業',
+  RE: '房地產',
 };
 
 export const LAYER_THEME: Record<number, string> = {
+  // Taiwan
   1:'A',2:'A',3:'A',4:'A',5:'A',6:'A',7:'A',8:'A',9:'A',10:'A',
   16:'A',17:'A',18:'A',19:'A',25:'A',26:'A',
   11:'B',12:'B',13:'B',14:'B',15:'B',
   21:'C',22:'C',23:'C',24:'C',
+  // US — one layer per GICS sector (for phase 1; sub_category = yfinance industry)
+  101:'IT', 102:'HC', 103:'FN', 104:'CD', 105:'CS', 106:'CM',
+  107:'IN', 108:'EN', 109:'MT', 110:'UT', 111:'RE',
 };
 
 // Display number within theme — for Theme A these are ids 16-19/25-26 that

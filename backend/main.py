@@ -285,8 +285,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AI 產業鏈股票雷達 API",
-    version="1.0.0",
+    title="股票儀表板 API",
+    version="2.0.0",
     lifespan=lifespan,
 )
 

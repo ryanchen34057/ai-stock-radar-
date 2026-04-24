@@ -512,6 +512,19 @@
     "enabled": true
   },
   {
+    "symbol": "2355",
+    "name": "敬鵬",
+    "layer": 5,
+    "layer_name": "PCB 主機板",
+    "sub_category": "車用 PCB",
+    "note": "台廠最大車用 PCB / Tesla・BMW・Bosch 供應鏈",
+    "theme": "B",
+    "themes": ["B", "A"],
+    "secondary_layers": [13],
+    "tier": 2,
+    "enabled": true
+  },
+  {
     "symbol": "3044",
     "name": "健鼎",
     "layer": 5,
@@ -692,6 +705,17 @@
     "note": "打入 Meta 高壓專案",
     "theme": "A",
     "tier": 3,
+    "enabled": true
+  },
+  {
+    "symbol": "3338",
+    "name": "泰碩",
+    "layer": 6,
+    "layer_name": "散熱電源",
+    "sub_category": "散熱",
+    "note": "熱導管 / 散熱模組 (伺服器+NB)",
+    "theme": "A",
+    "tier": 2,
     "enabled": true
   },
   {
@@ -1897,8 +1921,8 @@
     "enabled": true
   },
   {
-    "symbol": "4516",
-    "name": "達興材",
+    "symbol": "5234",
+    "name": "達興材料",
     "layer": 17,
     "layer_name": "特用化學材料",
     "sub_category": "特殊化學",

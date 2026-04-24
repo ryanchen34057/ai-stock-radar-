@@ -596,22 +596,45 @@ def ensure_klines_current(backfill_period: str = "5y"):
     done_lock = threading.Lock()
 
     def _fetch_one(item: tuple[dict, str | None]) -> tuple[str, bool, str]:
-        """Returns (symbol, success, message). Called from worker threads."""
+        """Returns (symbol, success, message). Called from worker threads.
+
+        US symbols use Nasdaq.com (keyless, no rate-limit grief) and only fall
+        back to yfinance if Nasdaq returns nothing — this avoids Yahoo's
+        aggressive IP throttling that made US fetches fail entirely.
+        TW symbols continue on yfinance since Nasdaq doesn't cover TWSE/TPEx.
+        """
         s, last = item
         symbol = s["symbol"]
         try:
             mk = s.get("market", "TW")
             if last:
                 start_str = (_dt.strptime(last, "%Y-%m-%d").date() + _td(days=1)).strftime("%Y-%m-%d")
-                df, info = fetch_yfinance_range(symbol, start_str, end_str, market=mk)
             else:
-                df, info = fetch_yfinance(symbol, backfill_period, market=mk)
+                start_str = None
+
+            df = None
+            source = None
+            if mk == "US":
+                from app.services import nasdaq_service
+                if start_str:
+                    df = nasdaq_service.fetch_klines(symbol, start_str, today.strftime("%Y-%m-%d"))
+                else:
+                    df = nasdaq_service.fetch_klines_period(symbol, backfill_period)
+                source = "nasdaq" if df is not None and not df.empty else None
+
+            if df is None or df.empty:
+                if start_str:
+                    df, _ = fetch_yfinance_range(symbol, start_str, end_str, market=mk)
+                else:
+                    df, _ = fetch_yfinance(symbol, backfill_period, market=mk)
+                if df is not None and not df.empty:
+                    source = "yfinance"
 
             if df is not None and not df.empty:
                 upsert_klines(symbol, df)
                 # Skip metadata upsert here — ensure_eps_current + FinMind run
                 # right after and both write more accurate info.
-                return (symbol, True, f"+{len(df)} rows")
+                return (symbol, True, f"+{len(df)} rows ({source})")
             return (symbol, False, "no new rows (holiday/delisted/already current)")
         except Exception as e:
             return (symbol, False, f"error: {e}")

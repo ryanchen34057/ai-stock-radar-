@@ -59,7 +59,9 @@ def init_schema():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
-            CREATE INDEX IF NOT EXISTS idx_stocks_market ON stocks(market);
+            -- idx_stocks_market is created by the v1.4 migration below
+            -- (line 318). Don't add it here because pre-market-column
+            -- databases will crash on "no such column: market".
 
             CREATE TABLE IF NOT EXISTS klines (
                 symbol TEXT,
@@ -315,11 +317,15 @@ def init_schema():
             conn.commit()
         if "market" not in existing_stock_cols:
             conn.execute("ALTER TABLE stocks ADD COLUMN market TEXT NOT NULL DEFAULT 'TW'")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_stocks_market ON stocks(market)")
             conn.commit()
         if "exchange" not in existing_stock_cols:
             conn.execute("ALTER TABLE stocks ADD COLUMN exchange TEXT DEFAULT NULL")
             conn.commit()
+        # Always ensure the market index exists — covers both fresh DBs (where
+        # the column was created by the initial executescript) and migrated
+        # ones (where ALTER TABLE added it above).
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_stocks_market ON stocks(market)")
+        conn.commit()
         existing_kol_cols = {row[1] for row in conn.execute("PRAGMA table_info(kol_videos)").fetchall()}
         if existing_kol_cols and "summariser" not in existing_kol_cols:
             conn.execute("ALTER TABLE kol_videos ADD COLUMN summariser TEXT DEFAULT ''")

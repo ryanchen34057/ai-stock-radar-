@@ -94,25 +94,16 @@ export function BusinessCycle() {
           景氣燈號
         </div>
 
-        {/* LED traffic-light face */}
-        <LedLight color={data.color ?? '#484F58'} score={data.total_score ?? 0} />
+        {/* Fear & Greed-style gauge */}
+        <CycleGauge score={data.total_score ?? 0} color={data.color ?? '#484F58'} label={data.label ?? '—'} />
 
-        {/* Big label + state */}
-        <div className="flex flex-col items-center gap-1 mt-1">
-          <div className="flex items-baseline gap-3">
-            <span
-              className="text-4xl font-extrabold tracking-wide drop-shadow-[0_2px_6px_rgba(0,0,0,0.5)]"
-              style={{ color: data.color }}
-            >
-              {data.label}
-            </span>
-            <span className="text-xl font-bold text-text-p">{data.state}</span>
-          </div>
-          <div className="text-base text-white font-medium">{data.action}</div>
-        </div>
+        {/* Action line */}
+        {data.action && (
+          <div className="text-sm text-white font-medium mt-1">{data.action}</div>
+        )}
 
         {/* Indicator chips — compact summary, centered */}
-        <div className="flex items-center gap-1.5 flex-wrap justify-center mt-2 max-w-3xl">
+        <div className="flex items-center gap-1.5 flex-wrap justify-center mt-1 max-w-3xl">
           {data.indicators?.filter(i => i.score !== null).map(i => (
             <div
               key={i.key}
@@ -328,126 +319,76 @@ function PmiSetter({ onUpdated }: { onUpdated: () => void }) {
 }
 
 /**
- * Smooth glowing traffic-light bulb — dark bezel + uniform glass lens with
- * soft gradient glow (no LED dot matrix). Surrounded by pulsing halo + pings.
+ * Fear & Greed-style horizontal gauge. 5 zones across the Taiwan 景氣燈號 scale:
+ * 藍燈(0-10) · 黃藍(10-20) · 綠燈(20-30) · 黃紅(30-40) · 紅燈(40-50).
+ * Pointer sits at score/50 of the bar width.
  */
-function LedLight({ color, score }: { color: string; score: number }) {
+function CycleGauge({ score, color, label }: { score: number; color: string; label: string }) {
+  const pct = Math.max(0, Math.min(100, (score / 50) * 100));
+  const zones = [
+    { name: '藍燈', c: '#1976D2' },
+    { name: '黃藍', c: '#58A6FF' },
+    { name: '綠燈', c: '#00C851' },
+    { name: '黃紅', c: '#FF9800' },
+    { name: '紅燈', c: '#FF3B3B' },
+  ];
   return (
-    <div className="relative flex items-center justify-center" style={{ width: 200, height: 200, color }}>
-      {/* Outward radiating rings ("ping") — expanding then fading, infinite */}
-      <div
-        className="absolute rounded-full bulb-ping pointer-events-none"
-        style={{
-          inset: '10px',
-          border: `3px solid ${color}`,
-          boxShadow: `0 0 20px ${color}88`,
-        }}
-      />
-      <div
-        className="absolute rounded-full bulb-ping pointer-events-none"
-        style={{
-          inset: '10px',
-          border: `2px solid ${color}`,
-          animationDelay: '1.3s',
-        }}
-      />
+    <div className="w-full max-w-lg flex flex-col items-center gap-2 mt-1">
+      {/* Zone labels */}
+      <div className="w-full grid grid-cols-5 text-[10px] text-text-t font-medium">
+        {zones.map(z => (
+          <div key={z.name} className="text-center" style={{ color: z.c }}>{z.name}</div>
+        ))}
+      </div>
 
-      {/* Outer pulsing halo */}
-      <div
-        className="absolute inset-0 rounded-full bulb-halo pointer-events-none"
-        style={{
-          background: `radial-gradient(circle, ${color}CC 0%, ${color}55 40%, transparent 72%)`,
-          filter: 'blur(16px)',
-        }}
-      />
-      {/* Wider softer halo */}
-      <div
-        className="absolute rounded-full pointer-events-none"
-        style={{
-          inset: '-20px',
-          background: `radial-gradient(circle, ${color}55 0%, ${color}22 40%, transparent 70%)`,
-          filter: 'blur(28px)',
-        }}
-      />
-
-      <svg viewBox="-80 -80 160 160" width="160" height="160" className="relative bulb-body">
-        <defs>
-          {/* Glass lens: bright filament-like core in the upper-left, color
-              saturation through the body, slightly darker lower-right edge
-              where light falls off. Wide bright core = translucent feel. */}
-          <radialGradient id="lens-glow" cx="35%" cy="30%" r="75%">
-            <stop offset="0%"   stopColor="#ffffff" stopOpacity="1"    />
-            <stop offset="10%"  stopColor="#ffffff" stopOpacity="0.7"  />
-            <stop offset="28%"  stopColor={color}   stopOpacity="0.95" />
-            <stop offset="65%"  stopColor={color}   stopOpacity="0.85" />
-            <stop offset="100%" stopColor={color}   stopOpacity="0.45" />
-          </radialGradient>
-          {/* Overhead light pass — brightens the top half ("light rises") */}
-          <linearGradient id="top-light" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor="#ffffff" stopOpacity="0.28" />
-            <stop offset="50%"  stopColor="#ffffff" stopOpacity="0"    />
-            <stop offset="100%" stopColor="#000000" stopOpacity="0.18" />
-          </linearGradient>
-          {/* Thin rim glow — where light refracts at the glass edge */}
-          <radialGradient id="rim-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="80%"  stopColor={color}   stopOpacity="0"    />
-            <stop offset="94%"  stopColor="#ffffff" stopOpacity="0.35" />
-            <stop offset="100%" stopColor={color}   stopOpacity="0"    />
-          </radialGradient>
-          <filter id="soft-blur" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="1.2" />
-          </filter>
-        </defs>
-
-        {/* Outer bezel (dark plastic frame) */}
-        <circle cx="0" cy="0" r="78" fill="#0a0a0a" />
-        <circle cx="0" cy="0" r="75" fill="#2a2a2a" />
-        <circle cx="0" cy="0" r="72" fill="#111" />
-
-        {/* Glass lens — main colored glow */}
-        <circle cx="0" cy="0" r="70" fill="url(#lens-glow)" />
-        {/* Top lighting pass (translucent feel) */}
-        <circle cx="0" cy="0" r="70" fill="url(#top-light)" />
-        {/* Rim light where the glass meets the bezel */}
-        <circle cx="0" cy="0" r="70" fill="url(#rim-glow)" />
-
-        {/* Inner bezel shadow to separate glass from frame */}
-        <circle
-          cx="0" cy="0" r="70"
-          fill="none"
-          stroke="rgba(0,0,0,0.35)"
-          strokeWidth="2"
-        />
-
-        {/* Top-left glass highlight — thick soft reflection */}
-        <ellipse
-          cx="-15" cy="-32" rx="42" ry="16"
-          fill="white" opacity="0.30" filter="url(#soft-blur)"
-        />
-        {/* Small concentrated highlight (specular hot-spot) */}
-        <ellipse
-          cx="-22" cy="-40" rx="13" ry="5"
-          fill="white" opacity="0.65" filter="url(#soft-blur)"
-        />
-        {/* Second small highlight on the opposite side to suggest translucent glass */}
-        <ellipse
-          cx="24" cy="22" rx="18" ry="8"
-          fill="white" opacity="0.08" filter="url(#soft-blur)"
-        />
-
-        {/* Large score number */}
-        <text
-          x="0" y="4"
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="#ffffff"
-          fontSize="42"
-          fontWeight="900"
-          style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.85))' }}
+      {/* Gradient bar + pointer */}
+      <div className="relative w-full h-3 rounded-full overflow-visible"
+           style={{
+             background: 'linear-gradient(to right, #1976D2 0%, #58A6FF 25%, #00C851 50%, #FF9800 75%, #FF3B3B 100%)',
+             boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)',
+           }}>
+        {/* Tick marks at zone boundaries */}
+        {[20, 40, 60, 80].map(p => (
+          <div key={p} className="absolute top-0 bottom-0 w-px bg-black/30" style={{ left: `${p}%` }} />
+        ))}
+        {/* Pointer */}
+        <div
+          className="absolute -top-1 -translate-x-1/2"
+          style={{ left: `${pct}%` }}
         >
-          {Math.round(score)}
-        </text>
-      </svg>
+          <svg width="18" height="14" viewBox="0 0 18 14" style={{ filter: `drop-shadow(0 2px 4px ${color}aa)` }}>
+            <polygon points="9,14 0,0 18,0" fill="#ffffff" stroke={color} strokeWidth="2" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Big number + label below the pointer */}
+      <div
+        className="relative w-full"
+      >
+        <div
+          className="absolute -translate-x-1/2 flex flex-col items-center"
+          style={{ left: `${pct}%`, top: 0 }}
+        >
+          <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+            <span
+              className="text-3xl font-extrabold font-mono tracking-tight"
+              style={{ color, textShadow: `0 2px 8px ${color}66` }}
+            >
+              {Math.round(score)}
+            </span>
+            <span className="text-sm text-text-t">·</span>
+            <span
+              className="text-xl font-bold"
+              style={{ color }}
+            >
+              {label}
+            </span>
+          </div>
+        </div>
+        {/* Spacer so parent gets height */}
+        <div className="h-10" />
+      </div>
     </div>
   );
 }

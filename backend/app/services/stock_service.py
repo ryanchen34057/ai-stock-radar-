@@ -216,7 +216,10 @@ def upsert_metadata(symbol: str, info: dict):
 def calculate_ma(closes: list[float], period: int) -> float | None:
     if len(closes) < period:
         return None
-    return round(sum(closes[-period:]) / period, 2)
+    window = [c for c in closes[-period:] if c is not None]
+    if len(window) < period:
+        return None
+    return round(sum(window) / period, 2)
 
 
 def get_dashboard_data(market: str = "TW") -> dict:
@@ -307,7 +310,7 @@ def get_dashboard_data(market: str = "TW") -> dict:
             current_price = current["close"] if current else None
             change = None
             change_pct = None
-            if current and prev and prev["close"]:
+            if current and prev and current["close"] is not None and prev["close"]:
                 change = round(current["close"] - prev["close"], 2)
                 change_pct = round(change / prev["close"] * 100, 2)
 

@@ -298,7 +298,9 @@ def get_dashboard_data(market: str = "TW") -> dict:
             # pivot detection over a 65-bar base.
             klines_display = klines_all[-260:] if len(klines_all) > 260 else klines_all
 
-            closes = [k["close"] for k in klines_all]
+            # Drop None closes defensively — a single NULL row (seen on some
+            # freshly-seeded US tickers) makes max()/MA crash with TypeError.
+            closes = [k["close"] for k in klines_all if k["close"] is not None]
             current = klines_all[-1] if klines_all else None
             prev = klines_all[-2] if len(klines_all) >= 2 else None
 

@@ -40,6 +40,7 @@ export function StockGrid({
   themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
   const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
+  const market = useDashboardStore((s) => s.market);
   const { data: insti } = useInstitutional();
 
   const filtered = useMemo(() => {
@@ -491,7 +492,7 @@ export function StockGrid({
               <span className="text-[11px] text-text-t">
                 {THEME_LABELS[theme] ?? theme} · {flat.length} 檔 · {subs.length} 題材
               </span>
-              {leaders.length > 0 && (
+              {leaders.length > 0 && market !== 'US' && (
                 <span className="text-[11px] text-accent font-semibold ml-auto">
                   ◆ 龍頭：{leaders.map((s) => `${s.symbol} ${s.name}`).join('・')}
                 </span>

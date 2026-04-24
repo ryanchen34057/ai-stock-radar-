@@ -140,7 +140,10 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   selectedStock: null,
 
   setMarket: (market) =>
-    set({ market, stocks: [], lastUpdated: null, lastFetchTime: null, error: null, selectedLayers: [] }),
+    // Reset themeFilter too — its valid values differ per market (TW uses
+    // A/B/C/cross, US uses GICS codes IT/HC/FN/...), and carrying the TW
+    // default 'A' over to US filters out every stock.
+    set({ market, stocks: [], lastUpdated: null, lastFetchTime: null, error: null, selectedLayers: [], themeFilter: 'all' }),
   setStocks: (stocks, lastUpdated) =>
     set({ stocks, lastUpdated, lastFetchTime: Date.now(), error: null }),
   setLoading: (loading) => set({ loading }),

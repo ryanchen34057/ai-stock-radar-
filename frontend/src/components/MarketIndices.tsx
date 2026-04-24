@@ -52,6 +52,14 @@ export function MarketIndices() {
   );
 }
 
+// Indices listed in US / EU trade by Western convention (green-up). Anything
+// not in this set (^TWII, ^TPE, ^N225, ^HSI, ^SSEC, etc.) uses Asian
+// red-up convention.
+const US_EU_INDEX_SYMBOLS = new Set([
+  '^GSPC', '^DJI', '^IXIC', '^SOX', '^RUT', '^VIX',
+  '^STOXX50E', '^FTSE', '^GDAXI', '^FCHI',
+]);
+
 function IndexCard({ idx, days }: { idx: IndexData; days: number }) {
   const chartRef = useRef<HTMLDivElement>(null);
   const slice = useMemo(
@@ -60,6 +68,9 @@ function IndexCard({ idx, days }: { idx: IndexData; days: number }) {
   );
   const isUp = idx.change_pct >= 0;
   const hasVolume = slice.some((k) => k.volume > 0);
+  const westernColours = US_EU_INDEX_SYMBOLS.has(idx.symbol);
+  const upColour   = westernColours ? '#00C851' : '#FF3B3B';
+  const downColour = westernColours ? '#FF3B3B' : '#00C851';
 
   useEffect(() => {
     if (!chartRef.current || slice.length === 0) return;
@@ -85,9 +96,9 @@ function IndexCard({ idx, days }: { idx: IndexData; days: number }) {
     });
 
     const candles = chart.addCandlestickSeries({
-      upColor: '#FF3B3B',   downColor: '#00C851',
-      borderUpColor: '#FF3B3B', borderDownColor: '#00C851',
-      wickUpColor: '#FF3B3B',   wickDownColor: '#00C851',
+      upColor: upColour,       downColor: downColour,
+      borderUpColor: upColour, borderDownColor: downColour,
+      wickUpColor: upColour,   wickDownColor: downColour,
       priceLineVisible: false, lastValueVisible: false,
     });
     candles.setData(slice.map((k) => ({
@@ -103,10 +114,12 @@ function IndexCard({ idx, days }: { idx: IndexData; days: number }) {
         priceLineVisible: false,
       });
       chart.priceScale('v').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } });
+      const volUp   = westernColours ? 'rgba(0,200,81,0.4)' : 'rgba(255,59,59,0.4)';
+      const volDown = westernColours ? 'rgba(255,59,59,0.4)' : 'rgba(0,200,81,0.4)';
       vol.setData(slice.map((k) => ({
         time: k.date as unknown as import('lightweight-charts').UTCTimestamp,
         value: k.volume,
-        color: k.close >= k.open ? 'rgba(255,59,59,0.4)' : 'rgba(0,200,81,0.4)',
+        color: k.close >= k.open ? volUp : volDown,
       })));
     }
 
@@ -120,8 +133,10 @@ function IndexCard({ idx, days }: { idx: IndexData; days: number }) {
           <span>{idx.emoji}</span>
           <span className="truncate">{idx.name_zh}</span>
         </span>
-        <span className={`text-[10px] font-mono tabular-nums font-bold flex-shrink-0
-          ${isUp ? 'text-tw-down' : 'text-tw-up'}`}>
+        <span
+          className="text-[10px] font-mono tabular-nums font-bold flex-shrink-0"
+          style={{ color: isUp ? upColour : downColour }}
+        >
           {isUp ? '+' : ''}{idx.change_pct.toFixed(2)}%
         </span>
       </div>

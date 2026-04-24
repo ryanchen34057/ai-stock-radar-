@@ -15,11 +15,23 @@ interface Props {
   selectedMA: MAPeriod;
   maValues: MAValues;
   signal: 'above' | 'below' | 'at';
+  /** Market — flips candle colours (TW / Asia: red-up; US / EU: green-up). */
+  market?: 'TW' | 'US';
   /** Deprecated -- visibility now comes from global store. Kept for backwards-compat. */
   showBollinger?: boolean;
 }
 
-export function MiniKlineChart({ klines, selectedMA }: Props) {
+// TW & other Asian markets: red = up, green = down.
+// US & EU markets: green = up, red = down.
+const UP_RED = '#FF3B3B';
+const UP_GREEN = '#00C851';
+function candleColors(market?: 'TW' | 'US') {
+  const up = market === 'US' ? UP_GREEN : UP_RED;
+  const down = market === 'US' ? UP_RED : UP_GREEN;
+  return { up, down };
+}
+
+export function MiniKlineChart({ klines, selectedMA, market }: Props) {
   const maVisible = useDashboardStore((s) => s.maVisible);
   const bbVisible = useDashboardStore((s) => s.bbVisible);
   const showAnyBB = bbVisible.upper || bbVisible.middle || bbVisible.lower;
@@ -70,13 +82,14 @@ export function MiniKlineChart({ klines, selectedMA }: Props) {
       handleScale: false,
     });
 
+    const { up, down } = candleColors(market);
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#FF3B3B',
-      downColor: '#00C851',
-      borderUpColor: '#FF3B3B',
-      borderDownColor: '#00C851',
-      wickUpColor: '#FF3B3B',
-      wickDownColor: '#00C851',
+      upColor: up,
+      downColor: down,
+      borderUpColor: up,
+      borderDownColor: down,
+      wickUpColor: up,
+      wickDownColor: down,
     });
 
     const candleData = klines.map((k) => ({

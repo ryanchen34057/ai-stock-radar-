@@ -107,13 +107,16 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
       crosshair: { mode: 1 },
     });
 
+    // Candle colours flip by market: TW/Asia = red-up/green-down, US = green-up/red-down.
+    const up   = stock.market === 'US' ? '#00C851' : '#FF3B3B';
+    const down = stock.market === 'US' ? '#FF3B3B' : '#00C851';
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#FF3B3B',
-      downColor: '#00C851',
-      borderUpColor: '#FF3B3B',
-      borderDownColor: '#00C851',
-      wickUpColor: '#FF3B3B',
-      wickDownColor: '#00C851',
+      upColor: up,
+      downColor: down,
+      borderUpColor: up,
+      borderDownColor: down,
+      wickUpColor: up,
+      wickDownColor: down,
     });
 
     candleSeries.setData(klines.map((k) => ({

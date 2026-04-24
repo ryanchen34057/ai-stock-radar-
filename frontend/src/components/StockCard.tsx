@@ -365,6 +365,7 @@ export function StockCard({ stock, selectedMA, insti, breakout, onClick }: Props
             selectedMA={selectedMA}
             maValues={stock.ma}
             signal={signal}
+            market={stock.market}
           />
         ) : (
           <div className="h-[88px] flex items-center justify-center text-text-t text-xs">

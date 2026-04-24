@@ -70,8 +70,9 @@ def refresh_shareholding_weekly() -> dict:
     # Limit writes to symbols we actually track in the dashboard
     conn = get_connection()
     try:
+        # TDCC 千張大戶 data only exists for Taiwan listings.
         tracked = {r["symbol"] for r in conn.execute(
-            "SELECT symbol FROM stocks WHERE enabled = 1"
+            "SELECT symbol FROM stocks WHERE enabled = 1 AND market = 'TW'"
         ).fetchall()}
     finally:
         conn.close()

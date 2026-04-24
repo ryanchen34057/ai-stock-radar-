@@ -250,11 +250,13 @@ def ensure_finmind_current(stale_hours: float = 24.0) -> dict:
     """
     conn = get_connection()
     try:
+        # FinMind only covers Taiwan listings — filter out US symbols that
+        # would otherwise spam 403 Forbidden for thousands of calls.
         rows = conn.execute(
             """SELECT s.symbol, m.last_updated, m.monthly_revenue_yoy
                FROM stocks s
                LEFT JOIN metadata m ON s.symbol = m.symbol
-               WHERE s.enabled = 1"""
+               WHERE s.enabled = 1 AND s.market = 'TW'"""
         ).fetchall()
     finally:
         conn.close()

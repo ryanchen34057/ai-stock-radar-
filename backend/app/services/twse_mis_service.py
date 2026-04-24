@@ -48,11 +48,11 @@ _cache_lock = threading.Lock()
 
 
 def _load_all_symbols() -> list[str]:
-    """Return every enabled stock symbol from the DB."""
+    """Return every enabled TW stock symbol (TWSE MIS is TWSE/TPEx-only)."""
     conn = get_connection()
     try:
         rows = conn.execute(
-            "SELECT symbol FROM stocks WHERE enabled = 1 ORDER BY symbol"
+            "SELECT symbol FROM stocks WHERE enabled = 1 AND market = 'TW' ORDER BY symbol"
         ).fetchall()
     finally:
         conn.close()

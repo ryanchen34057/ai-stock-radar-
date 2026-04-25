@@ -13,6 +13,7 @@ import PeTooltip from './PeTooltip';
 import { getDisplayPe } from '../utils/formatPe';
 import CapacitySection from './CapacitySection';
 import { analyzeAllConditions, TONE_CLASS } from '../utils/technicalConditions';
+import { aggregateKlines, rescaleBarsForPeriod, type KPeriod } from '../utils/aggregateKlines';
 
 const MA_COLORS: Record<number, string> = {
   5: '#58A6FF',
@@ -51,6 +52,15 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
   const [fullKlines, setFullKlines] = useState<KLine[]>([]);
   const [loadingKlines, setLoadingKlines] = useState(true);
   const [rangeIndex, setRangeIndex] = useState(2); // default 1年
+  const [kPeriod, setKPeriod] = useState<KPeriod>('D');
+
+  // Aggregate the daily series down to weekly / monthly bars when needed.
+  // All MA / BB / KD math runs on this aggregated series, so MA20 in weekly
+  // mode is a 20-week MA — matches what brokers show.
+  const periodKlines = useMemo(
+    () => aggregateKlines(fullKlines, kPeriod),
+    [fullKlines, kPeriod],
+  );
   // MA / BB visibility is shared with the ControlBar via the global store.
   const anyMaOn = Object.values(maVisible).some(Boolean);
   const { data: news, loading: newsLoading } = useStockNews(stock.symbol);
@@ -83,10 +93,12 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
 
   // Build chart whenever klines or range changes
   useEffect(() => {
-    if (!chartRef.current || fullKlines.length === 0 || loadingKlines) return;
+    if (!chartRef.current || periodKlines.length === 0 || loadingKlines) return;
 
-    const days = RANGES[rangeIndex].days;
-    const klines = fullKlines.slice(-days);
+    // RANGES are expressed in trading days; convert to weekly/monthly bar
+    // counts so 「3個月」 still feels like ~3 months in W/M mode.
+    const bars = rescaleBarsForPeriod(RANGES[rangeIndex].days, kPeriod);
+    const klines = periodKlines.slice(-bars);
 
     const container = chartRef.current;
     const chart = createChart(container, {
@@ -124,8 +136,9 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
       open: k.open, high: k.high, low: k.low, close: k.close,
     })));
 
-    // Offset from full kline series into the visible slice — shared by all MA/VOL overlays
-    const offset = fullKlines.length - klines.length;
+    // Offset from full (period-aggregated) kline series into the visible
+    // slice — shared by all MA / VOL / BB / KD overlays.
+    const offset = periodKlines.length - klines.length;
 
     // Volume histogram — overlay series on the bottom 22% of the chart
     const volumeSeries = chart.addHistogramSeries({
@@ -145,7 +158,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
 
     // Volume MA20 line on same overlay scale
     const VOL_MA_PERIOD = 20;
-    const allVolumes = fullKlines.map((k) => k.volume);
+    const allVolumes = periodKlines.map((k) => k.volume);
     const volMaFull = calculateMAFull(allVolumes, VOL_MA_PERIOD);
     const volMaSlice = volMaFull.slice(offset);
     const volMaData = klines
@@ -165,7 +178,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
     }
 
     // Compute all 6 MA lines from the full klines (so MA is accurate even when zoomed)
-    const allCloses = fullKlines.map((k) => k.close);
+    const allCloses = periodKlines.map((k) => k.close);
 
     for (const period of [5, 10, 20, 60, 120, 240] as MAPeriod[]) {
       if (!maVisible[period]) continue;  // user hid this MA line
@@ -245,7 +258,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
     }
 
     // KD (5, 3, 3) — computed over full series for accuracy, drawn on the bottom panel
-    const kdFull = calculateKD(fullKlines, 5, 3, 3);
+    const kdFull = calculateKD(periodKlines, 5, 3, 3);
     const kSlice = kdFull.k.slice(offset);
     const dSlice = kdFull.d.slice(offset);
     const kData = klines
@@ -282,7 +295,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
 
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [fullKlines, loadingKlines, rangeIndex, selectedMA, darkMode, showAnyBB, bbVisible, maVisible]);
+  }, [periodKlines, loadingKlines, rangeIndex, kPeriod, selectedMA, darkMode, showAnyBB, bbVisible, maVisible, stock.market]);
 
   // KD trend status — derived from the full kline series so it's stable
   // across range toggles.
@@ -461,6 +474,25 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
                   </button>
                 );
               })}
+              <span className="w-px h-4 bg-border-c mx-1" />
+              {/* 日 / 週 / 月 K 切換 */}
+              {([
+                { val: 'D' as const, label: '日K' },
+                { val: 'W' as const, label: '週K' },
+                { val: 'M' as const, label: '月K' },
+              ]).map(({ val, label }) => (
+                <button
+                  key={val}
+                  onClick={() => setKPeriod(val)}
+                  className={`px-2 py-0.5 text-xs rounded font-mono transition-colors ${
+                    kPeriod === val
+                      ? 'bg-amber-500/25 text-amber-300 border border-amber-400/60 font-bold'
+                      : 'text-text-s hover:text-text-p border border-border-c'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
               <span className="w-px h-4 bg-border-c mx-1" />
               {RANGES.map((r, i) => (
                 <button

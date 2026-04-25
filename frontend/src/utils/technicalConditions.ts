@@ -16,6 +16,7 @@ import {
 } from './calcBB';
 import { analyzeBowlPattern } from './bowlPattern';
 import { analyzeBreakoutPending, patternLabel } from './breakoutPending';
+import { analyzeBreakoutWithVolume } from './breakoutVolume';
 import { calculateKD, getKDTrend } from './calcKD';
 
 export type ConditionTone =
@@ -189,6 +190,20 @@ export function analyzeAllConditions(stock: StockData): TriggeredCondition[] {
     out.push({ key: 'breakoutPending', label: `快破前高 (${patternLabel(bp.pattern)})`,
                tone: 'pattern',
                detail: `距高點 ${bp.gapPct.toFixed(1)}%, 基底 ${bp.daysSinceHigh} bar` });
+  }
+
+  // 突破前高放量 — fresh breakout above prior 120-day base on heavy volume
+  if (k.length >= 121) {
+    const volumes = k.map((b) => b.volume ?? 0);
+    const bv = analyzeBreakoutWithVolume(closes, volumes);
+    if (bv !== null && bv.triggered) {
+      out.push({
+        key: 'breakoutVolume',
+        label: `突破前高放量 (+${bv.abovePct.toFixed(1)}%)`,
+        tone: 'pattern',
+        detail: `前高 ${bv.priorHigh.toFixed(1)}, 量 ${bv.volumeRatio.toFixed(1)}× MV20`,
+      });
+    }
   }
 
   // ── KD (5,3,3) ────────────────────────────────────────────────────────────

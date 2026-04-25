@@ -87,6 +87,7 @@ export function ControlBar() {
     alertFilter, setAlertFilter,
     maProximityFilter, setMAProximityFilter,
     breakoutPendingFilter, setBreakoutPendingFilter,
+    breakoutVolumeFilter, setBreakoutVolumeFilter,
     specialFilters, setSpecialFilters,
     instiFilters, setInstiFilters,
     priceFilter, setPriceFilter,
@@ -646,6 +647,59 @@ export function ControlBar() {
             ▸ W / U / 咖啡杯 / 平底基底，現價距 {breakoutPendingFilter.lookback}日高 ≤ {breakoutPendingFilter.threshold}%
           </span>
         )}
+
+        {/* 突破前高放量 — Just-cleared-resistance with volume confirmation */}
+        <div className="flex items-center gap-1 pl-3 ml-2 border-l border-border-c">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={breakoutVolumeFilter.enabled}
+              onChange={(e) => setBreakoutVolumeFilter({ ...breakoutVolumeFilter, enabled: e.target.checked })}
+              className="accent-tw-down w-3.5 h-3.5"
+            />
+            <span className="text-sm font-semibold text-white">突破前高放量</span>
+          </label>
+          <span className="text-xs text-text-t">前</span>
+          <select
+            value={breakoutVolumeFilter.lookback}
+            disabled={!breakoutVolumeFilter.enabled}
+            onChange={(e) => setBreakoutVolumeFilter({ ...breakoutVolumeFilter, lookback: Number(e.target.value) })}
+            className="text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                       focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {[60, 90, 120, 180, 240].map((d) => <option key={d} value={d}>{d} 日</option>)}
+          </select>
+          <span className="text-xs text-text-t">高，未超過</span>
+          <input
+            type="number" min={0} max={50} step={0.5}
+            value={breakoutVolumeFilter.maxAbovePct}
+            disabled={!breakoutVolumeFilter.enabled}
+            onChange={(e) => setBreakoutVolumeFilter({
+              ...breakoutVolumeFilter,
+              maxAbovePct: Math.max(0, parseFloat(e.target.value) || 8),
+            })}
+            className="w-14 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                       text-center focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          <span className="text-xs text-text-t">% ・量增</span>
+          <input
+            type="number" min={1} max={5} step={0.1}
+            value={breakoutVolumeFilter.volumeMultiplier}
+            disabled={!breakoutVolumeFilter.enabled}
+            onChange={(e) => setBreakoutVolumeFilter({
+              ...breakoutVolumeFilter,
+              volumeMultiplier: Math.max(1, parseFloat(e.target.value) || 1.5),
+            })}
+            className="w-14 text-xs bg-card-bg text-text-p border border-border-c rounded px-2 py-1
+                       text-center focus:outline-none focus:border-accent disabled:opacity-40 disabled:cursor-not-allowed"
+          />
+          <span className="text-xs text-text-t">× MV20</span>
+          {breakoutVolumeFilter.enabled && (
+            <span className="text-xs text-tw-down font-mono">
+              ▸ 突破 {breakoutVolumeFilter.lookback}日前高，量 ≥ {breakoutVolumeFilter.volumeMultiplier}× 月均
+            </span>
+          )}
+        </div>
 
         {/* 碗型態 (Cup / Rounded-bottom) */}
         <div className="flex items-center gap-1 pl-3 ml-2 border-l border-border-c">

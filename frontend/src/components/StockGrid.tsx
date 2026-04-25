@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, CandleFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BreakoutVolumeFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, CandleFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
 import { getSignal, getMaDistance, calculateMAFull } from '../utils/calcMA';
 import { analyzeBBExpansion, analyzeBBUpperCross, analyzeBBSqueeze, calculateBollingerBands } from '../utils/calcBB';
 import { analyzeBreakoutPending, type BreakoutPending } from '../utils/breakoutPending';
+import { analyzeBreakoutWithVolume } from '../utils/breakoutVolume';
 import { analyzeBowlPattern } from '../utils/bowlPattern';
 import { getDisplayPe } from '../utils/formatPe';
 import { calculateKD, getKDTrend } from '../utils/calcKD';
@@ -17,6 +18,7 @@ interface Props {
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
   breakoutPendingFilter: BreakoutPendingFilter;
+  breakoutVolumeFilter: BreakoutVolumeFilter;
   bbUpperCrossFilter: BBUpperCrossFilter;
   bbProximityFilter: BBProximityFilter;
   bbSqueezeFilter: BBSqueezeFilter;
@@ -35,7 +37,7 @@ interface Props {
 }
 
 export function StockGrid({
-  stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, candleFilter,
+  stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, breakoutVolumeFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, candleFilter,
   specialFilters, instiFilters, priceFilter, peFilter, kdFilters,
   themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
@@ -375,6 +377,25 @@ export function StockGrid({
       ) !== null);
     }
 
+    // 突破前高放量 — stock just cleared a multi-month resistance close on
+    // expanded volume. Classic flat-base breakout.
+    if (breakoutVolumeFilter.enabled) {
+      result = result.filter((s) => {
+        if (s.klines.length < breakoutVolumeFilter.lookback + 1) return false;
+        const closes = s.klines.map((k) => k.close);
+        const volumes = s.klines.map((k) => k.volume ?? 0);
+        const r = analyzeBreakoutWithVolume(closes, volumes, {
+          lookback: breakoutVolumeFilter.lookback,
+          excludeRecent: breakoutVolumeFilter.excludeRecent,
+          minAbovePct: 0,
+          maxAbovePct: breakoutVolumeFilter.maxAbovePct,
+          volumeMultiplier: breakoutVolumeFilter.volumeMultiplier,
+          volumeMaPeriod: 20,
+        });
+        return r !== null && r.triggered;
+      });
+    }
+
     // Sort
     return [...result].sort((a, b) => {
       switch (sortBy) {
@@ -395,7 +416,7 @@ export function StockGrid({
           return 0;
       }
     });
-  }, [stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, candleFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
+  }, [stocks, selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, breakoutVolumeFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, candleFilter, specialFilters, instiFilters, priceFilter, peFilter, kdFilters, themeFilter, tierFilter, searchQuery, selectedLayers, sortBy, insti]);
 
   // Pre-compute breakout analyses so cards don't re-run the logic twice.
   const breakoutBySymbol = useMemo<Map<string, BreakoutPending>>(() => {

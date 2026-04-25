@@ -11,7 +11,7 @@ import { MarketIndices } from './MarketIndices';
 export function Dashboard() {
   const {
     market, stocks, loading, error,
-    selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, candleFilter, specialFilters, instiFilters,
+    selectedMA, alertFilter, maProximityFilter, breakoutPendingFilter, breakoutVolumeFilter, bbUpperCrossFilter, bbProximityFilter, bbSqueezeFilter, bowlPatternFilter, candleFilter, specialFilters, instiFilters,
     priceFilter, peFilter, kdFilters,
     themeFilter, tierFilter, searchQuery,
     selectedLayers, sortBy,
@@ -69,6 +69,7 @@ export function Dashboard() {
               alertFilter={alertFilter}
               maProximityFilter={maProximityFilter}
               breakoutPendingFilter={breakoutPendingFilter}
+              breakoutVolumeFilter={breakoutVolumeFilter}
               bbUpperCrossFilter={bbUpperCrossFilter}
               bbProximityFilter={bbProximityFilter}
               bbSqueezeFilter={bbSqueezeFilter}

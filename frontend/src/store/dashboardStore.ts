@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, CandleFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
+import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BreakoutVolumeFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, CandleFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 
 export type Market = 'TW' | 'US';
 
@@ -17,6 +17,7 @@ interface DashboardState {
   alertFilter: AlertFilter;
   maProximityFilter: MAProximityFilter;
   breakoutPendingFilter: BreakoutPendingFilter;
+  breakoutVolumeFilter: BreakoutVolumeFilter;
   bbUpperCrossFilter: BBUpperCrossFilter;
   bbProximityFilter: BBProximityFilter;
   bbSqueezeFilter: BBSqueezeFilter;
@@ -51,6 +52,7 @@ interface DashboardState {
   setAlertFilter: (filter: AlertFilter) => void;
   setMAProximityFilter: (f: MAProximityFilter) => void;
   setBreakoutPendingFilter: (f: BreakoutPendingFilter) => void;
+  setBreakoutVolumeFilter: (f: BreakoutVolumeFilter) => void;
   setBBUpperCrossFilter: (f: BBUpperCrossFilter) => void;
   setBBProximityFilter: (f: BBProximityFilter) => void;
   setBBSqueezeFilter: (f: BBSqueezeFilter) => void;
@@ -119,6 +121,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   alertFilter: 'all',
   maProximityFilter: { enabled: false, ma: 20, direction: 'above', threshold: 3 },
   breakoutPendingFilter: { enabled: false, lookback: 60, threshold: 5, minBaseDays: 15 },
+  breakoutVolumeFilter: { enabled: false, lookback: 120, excludeRecent: 8, maxAbovePct: 8, volumeMultiplier: 1.5 },
   bbUpperCrossFilter: { enabled: false, withinDays: 3, requireStillAbove: false },
   bbProximityFilter: { enabled: false, band: 'upper', direction: 'at', threshold: 2 },
   bbSqueezeFilter: { enabled: false, level: 'moderate' },
@@ -152,6 +155,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   setAlertFilter: (alertFilter) => set({ alertFilter }),
   setMAProximityFilter: (maProximityFilter) => set({ maProximityFilter }),
   setBreakoutPendingFilter: (breakoutPendingFilter) => set({ breakoutPendingFilter }),
+  setBreakoutVolumeFilter: (breakoutVolumeFilter) => set({ breakoutVolumeFilter }),
   setBBUpperCrossFilter: (bbUpperCrossFilter) => set({ bbUpperCrossFilter }),
   setBBProximityFilter: (bbProximityFilter) => set({ bbProximityFilter }),
   setBBSqueezeFilter: (bbSqueezeFilter) => set({ bbSqueezeFilter }),

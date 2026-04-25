@@ -201,6 +201,26 @@ export interface BBSqueezeFilter {
 }
 
 /**
+ * "突破前高放量" filter — stocks that just cleared a multi-month resistance
+ * close on volume expansion. Classic flat-base / cup-with-handle breakout.
+ *
+ *   lookback         — window to scan for the prior high (e.g. 120 days)
+ *   excludeRecent    — ignore the last N bars when picking the high so a
+ *                      stock making a brand-new high TODAY measures itself
+ *                      against the older base, not the breakout candle
+ *   maxAbovePct      — today's close must be no more than this % above the
+ *                      prior high (keeps the signal "fresh")
+ *   volumeMultiplier — today's volume / MV20 threshold (e.g. 1.5x = 量增)
+ */
+export interface BreakoutVolumeFilter {
+  enabled: boolean;
+  lookback: number;
+  excludeRecent: number;
+  maxAbovePct: number;
+  volumeMultiplier: number;
+}
+
+/**
  * "碗型態" filter — classic William O'Neil cup/rounded-bottom pattern.
  *   loose    — 寬鬆：drawdown ≥ 10%、回升 ≥ 60%、鍋底 ≥ 4 bar
  *   moderate — 中度：drawdown ≥ 15%、回升 ≥ 75%、鍋底 ≥ 6 bar

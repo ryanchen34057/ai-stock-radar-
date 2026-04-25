@@ -121,6 +121,28 @@
     "enabled": true
   },
   {
+    "symbol": "6548",
+    "name": "長科*",
+    "layer": 1,
+    "layer_name": "晶片設計與製造",
+    "sub_category": "導線架 / 封裝載板",
+    "note": "AI 封裝引線架供應鏈",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "5285",
+    "name": "界霖",
+    "layer": 1,
+    "layer_name": "晶片設計與製造",
+    "sub_category": "導線架",
+    "note": "QFN/QFP 導線架",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
     "symbol": "3105",
     "name": "穩懋",
     "layer": 2,
@@ -719,6 +741,17 @@
     "enabled": true
   },
   {
+    "symbol": "5309",
+    "name": "系統電",
+    "layer": 6,
+    "layer_name": "散熱電源",
+    "sub_category": "電源 / UPS",
+    "note": "AI 資料中心電源 / UPS 供應鏈",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
     "symbol": "2345",
     "name": "智邦",
     "layer": 7,
@@ -997,6 +1030,17 @@
     "enabled": true
   },
   {
+    "symbol": "7703",
+    "name": "銳澤",
+    "layer": 10,
+    "layer_name": "電力基礎建設",
+    "sub_category": "配電 / 電力工程",
+    "note": "AI 資料中心配電與電力施工供應",
+    "theme": "A",
+    "tier": 2,
+    "enabled": true
+  },
+  {
     "symbol": "3131",
     "name": "弘塑",
     "layer": 16,
@@ -1137,6 +1181,28 @@
     "note": "台積電 CoPoS 唯一夥伴",
     "theme": "A",
     "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "8064",
+    "name": "東捷",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "半導體設備代理",
+    "note": "KLA / 應材代理 + 面板/半導體設備",
+    "theme": "A",
+    "tier": 1,
+    "enabled": true
+  },
+  {
+    "symbol": "6664",
+    "name": "群翊",
+    "layer": 16,
+    "layer_name": "半導體設備與精密零組件",
+    "sub_category": "PCB 烘烤曝光設備",
+    "note": "AI PCB 製程設備 (烘烤 / 曝光)",
+    "theme": "A",
+    "tier": 2,
     "enabled": true
   },
   {

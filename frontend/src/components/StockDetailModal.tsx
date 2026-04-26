@@ -14,6 +14,7 @@ import { getDisplayPe } from '../utils/formatPe';
 import CapacitySection from './CapacitySection';
 import { analyzeAllConditions, TONE_CLASS } from '../utils/technicalConditions';
 import { aggregateKlines, rescaleBarsForPeriod, type KPeriod } from '../utils/aggregateKlines';
+import { ReplayModal } from './ReplayModal';
 
 const MA_COLORS: Record<number, string> = {
   5: '#58A6FF',
@@ -53,6 +54,7 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
   const [loadingKlines, setLoadingKlines] = useState(true);
   const [rangeIndex, setRangeIndex] = useState(2); // default 1年
   const [kPeriod, setKPeriod] = useState<KPeriod>('D');
+  const [replayOpen, setReplayOpen] = useState(false);
 
   // Aggregate the daily series down to weekly / monthly bars when needed.
   // All MA / BB / KD math runs on this aggregated series, so MA20 in weekly
@@ -407,12 +409,21 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             {canNav && (
-              <span className="text-[11px] text-text-t font-mono mr-2 hidden sm:inline">
+              <span className="text-[11px] text-text-t font-mono mr-1 hidden sm:inline">
                 {navIdx + 1} / {navTotal} · ←/→ 切換
               </span>
             )}
+            <button
+              onClick={() => setReplayOpen(true)}
+              title="開啟覆盤 (1 分鐘 K 棒回放 + 模擬下單)"
+              className="px-2.5 py-1 text-xs font-semibold rounded border border-amber-400/60
+                         bg-amber-500/15 text-amber-300 hover:bg-amber-500/30 hover:text-amber-200
+                         transition-colors"
+            >
+              📼 覆盤
+            </button>
             <button
               onClick={onClose}
               title="關閉 (Esc)"
@@ -423,6 +434,9 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
             </button>
           </div>
         </div>
+        {replayOpen && (
+          <ReplayModal stock={stock} onClose={() => setReplayOpen(false)} />
+        )}
 
         {/* Price section */}
         <div className="p-4 border-b border-border-c">

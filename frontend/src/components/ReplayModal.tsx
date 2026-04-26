@@ -1,0 +1,461 @@
+/**
+ * 覆盤 — Intraday-replay modal.
+ *
+ * Pull a single trading day of 1-minute bars from the backend, then play
+ * them back at adjustable speed (1× / 5× / 10× / 30× / 60×). The candle
+ * chart accumulates bar-by-bar as the playhead advances. A simulated
+ * trading panel on the right lets the user buy/sell at the current bar's
+ * close to practise 盤感 with no real money risk.
+ *
+ * Limitations vs full tick replay:
+ *   - 1-minute granularity (no per-tick / no order book depth)
+ *   - yfinance only keeps the last ~7 trading days online
+ */
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createChart, ColorType } from 'lightweight-charts';
+import type { StockData } from '../types/stock';
+import { useIntradayBars, useIntradayDates, type IntradayBar } from '../hooks/useIntradayBars';
+
+interface Props {
+  stock: StockData;
+  onClose: () => void;
+}
+
+const SPEEDS = [1, 5, 10, 30, 60] as const;
+type Speed = typeof SPEEDS[number];
+
+// Real-world ms per simulated 1-minute bar at 1× = 60 000.
+const REAL_MS_PER_BAR = 60_000;
+
+interface SimTrade {
+  bar: number;
+  time: string;
+  side: 'buy' | 'sell';
+  qty: number;
+  price: number;
+}
+
+export function ReplayModal({ stock, onClose }: Props) {
+  // --- Date selection ----------------------------------------------------
+  const { dates } = useIntradayDates(stock.symbol);
+  const [date, setDate] = useState<string | undefined>(undefined);   // undefined = latest
+  const { data, loading, error } = useIntradayBars(stock.symbol, date);
+  const bars: IntradayBar[] = data?.bars ?? [];
+
+  // --- Playback ----------------------------------------------------------
+  const [playhead, setPlayhead] = useState(0);          // # of bars revealed (0..bars.length)
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState<Speed>(10);
+  const tickRef = useRef<number | null>(null);
+
+  // Reset playback when bars change (new day picked).
+  useEffect(() => {
+    setPlayhead(0);
+    setPlaying(false);
+    setTrades([]);
+    setPosition({ qty: 0, avgCost: 0 });
+  }, [data?.date]);
+
+  // Drive the playhead forward at the chosen speed.
+  useEffect(() => {
+    if (!playing || bars.length === 0) return;
+    const intervalMs = REAL_MS_PER_BAR / speed;
+    const id = window.setInterval(() => {
+      setPlayhead((p) => {
+        const next = p + 1;
+        if (next >= bars.length) {
+          setPlaying(false);
+          return bars.length;
+        }
+        return next;
+      });
+    }, intervalMs);
+    tickRef.current = id;
+    return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
+  }, [playing, speed, bars.length]);
+
+  // Visible bars = first `playhead` bars (playhead=0 shows nothing yet).
+  const visibleBars = useMemo(() => bars.slice(0, playhead), [bars, playhead]);
+  const currentBar: IntradayBar | null =
+    playhead > 0 && playhead <= bars.length ? bars[playhead - 1] : null;
+
+  // --- Chart -------------------------------------------------------------
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const candleSeriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addCandlestickSeries']> | null>(null);
+  const volumeSeriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addHistogramSeries']> | null>(null);
+
+  // Build the chart once per (stock, date) — colour scheme follows the
+  // market convention used elsewhere (TW = red-up, US = green-up).
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+    const chart = createChart(chartContainerRef.current, {
+      autoSize: true,
+      height: 420,
+      layout: {
+        background: { type: ColorType.Solid, color: '#0D1117' },
+        textColor: '#8B949E',
+      },
+      grid: {
+        vertLines: { color: '#21262D', style: 1 },
+        horzLines: { color: '#21262D', style: 1 },
+      },
+      timeScale: { borderColor: '#30363D', timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: '#30363D', scaleMargins: { top: 0.05, bottom: 0.30 } },
+      crosshair: { mode: 1 },
+    });
+
+    const up   = stock.market === 'US' ? '#00C851' : '#FF3B3B';
+    const down = stock.market === 'US' ? '#FF3B3B' : '#00C851';
+    const candle = chart.addCandlestickSeries({
+      upColor: up, downColor: down,
+      borderUpColor: up, borderDownColor: down,
+      wickUpColor: up,  wickDownColor: down,
+    });
+    candleSeriesRef.current = candle;
+
+    const vol = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } });
+    volumeSeriesRef.current = vol;
+
+    return () => chart.remove();
+  }, [stock.symbol, stock.market, data?.date]);
+
+  // Push the visible-bar slice into the chart whenever the playhead moves.
+  useEffect(() => {
+    const candle = candleSeriesRef.current;
+    const vol = volumeSeriesRef.current;
+    if (!candle || !vol) return;
+    if (visibleBars.length === 0) {
+      candle.setData([]);
+      vol.setData([]);
+      return;
+    }
+    const up   = stock.market === 'US' ? 'rgba(0,200,81,0.5)'  : 'rgba(255,59,59,0.5)';
+    const down = stock.market === 'US' ? 'rgba(255,59,59,0.5)' : 'rgba(0,200,81,0.5)';
+    candle.setData(visibleBars.map((b) => ({
+      time: (Date.parse(b.time) / 1000) as never,
+      open: b.open, high: b.high, low: b.low, close: b.close,
+    })));
+    vol.setData(visibleBars.map((b) => ({
+      time: (Date.parse(b.time) / 1000) as never,
+      value: b.volume,
+      color: b.close >= b.open ? up : down,
+    })));
+  }, [visibleBars, stock.market]);
+
+  // --- Simulated trading -------------------------------------------------
+  const [orderQty, setOrderQty] = useState(1);
+  const [position, setPosition] = useState<{ qty: number; avgCost: number }>({ qty: 0, avgCost: 0 });
+  const [trades, setTrades] = useState<SimTrade[]>([]);
+
+  const submit = (side: 'buy' | 'sell') => {
+    if (!currentBar || orderQty <= 0) return;
+    const px = currentBar.close;
+    const t: SimTrade = {
+      bar: playhead, time: currentBar.time.slice(11, 16),
+      side, qty: orderQty, price: px,
+    };
+    setTrades((arr) => [t, ...arr].slice(0, 50));
+
+    setPosition((p) => {
+      if (side === 'buy') {
+        const totalCost = p.avgCost * p.qty + px * orderQty;
+        const totalQty = p.qty + orderQty;
+        return { qty: totalQty, avgCost: totalQty > 0 ? totalCost / totalQty : 0 };
+      } else {
+        const newQty = p.qty - orderQty;
+        // Going flat or short: keep avgCost from the long basis for simple display.
+        return { qty: newQty, avgCost: newQty <= 0 ? 0 : p.avgCost };
+      }
+    });
+  };
+
+  const flat = () => {
+    if (!currentBar || position.qty === 0) return;
+    submit(position.qty > 0 ? 'sell' : 'buy');
+    // The above already updates position. After flatten, qty becomes 0.
+  };
+
+  const livePnl = (() => {
+    if (!currentBar || position.qty === 0) return 0;
+    return (currentBar.close - position.avgCost) * position.qty;
+  })();
+
+  // --- Header / controls -------------------------------------------------
+  const isUp = currentBar
+    ? (bars[0] && currentBar.close >= bars[0].open)
+    : false;
+  const tone = (val: number) => {
+    const pos = stock.market === 'US' ? '#00C851' : '#FF3B3B';
+    const neg = stock.market === 'US' ? '#FF3B3B' : '#00C851';
+    return val >= 0 ? pos : neg;
+  };
+
+  const reset = () => { setPlayhead(0); setPlaying(false); };
+
+  // ESC closes
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-black/85 backdrop-blur-sm flex items-center justify-center p-2"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-dash-bg border border-border-c rounded-xl w-full max-w-7xl max-h-[95vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-c flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">📼</span>
+            <span className="font-mono text-text-s text-sm">{stock.symbol}</span>
+            <h2 className="text-xl font-bold text-text-p">{stock.name}</h2>
+            <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold">
+              覆盤 · 1分鐘
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={date ?? data?.date ?? ''}
+              onChange={(e) => setDate(e.target.value || undefined)}
+              className="text-xs bg-card-bg border border-border-c rounded px-2 py-1 text-text-p"
+            >
+              {dates.length === 0 && <option value="">最新交易日</option>}
+              {dates.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <button
+              onClick={onClose}
+              title="關閉 (Esc)"
+              className="text-text-s hover:text-text-p text-xl w-8 h-8 flex items-center justify-center
+                         rounded hover:bg-card-bg transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Body — chart left, trade panel right */}
+        <div className="flex-1 min-h-0 flex">
+          {/* Left: chart + transport */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            {/* Quote header */}
+            <div className="px-4 py-2 border-b border-border-c flex flex-wrap items-baseline gap-x-5 gap-y-1">
+              {currentBar ? (
+                <>
+                  <span className="text-3xl font-bold font-mono tabular-nums"
+                        style={{ color: tone(currentBar.close - bars[0].open) }}>
+                    {currentBar.close.toFixed(2)}
+                  </span>
+                  <span className="text-sm font-mono"
+                        style={{ color: tone(currentBar.close - bars[0].open) }}>
+                    {(currentBar.close - bars[0].open >= 0 ? '+' : '')}
+                    {(currentBar.close - bars[0].open).toFixed(2)}{' '}
+                    ({((currentBar.close - bars[0].open) / bars[0].open * 100).toFixed(2)}%)
+                  </span>
+                  <span className="text-xs text-text-s">
+                    開 <span className="text-text-p font-mono">{bars[0].open.toFixed(2)}</span>
+                  </span>
+                  <span className="text-xs text-text-s">
+                    高 <span className="font-mono" style={{ color: tone(1) }}>
+                      {Math.max(...visibleBars.map((b) => b.high)).toFixed(2)}
+                    </span>
+                  </span>
+                  <span className="text-xs text-text-s">
+                    低 <span className="font-mono" style={{ color: tone(-1) }}>
+                      {Math.min(...visibleBars.map((b) => b.low)).toFixed(2)}
+                    </span>
+                  </span>
+                  <span className="text-xs text-text-s">
+                    時 <span className="font-mono text-text-p">{currentBar.time.slice(11, 16)}</span>
+                  </span>
+                  <span className="text-xs text-text-s ml-auto">
+                    {playhead} / {bars.length} bars
+                  </span>
+                </>
+              ) : (
+                <span className="text-text-t text-sm">
+                  {loading ? '載入 1 分鐘 K 棒中…' :
+                   error    ? `錯誤：${error}` :
+                   bars.length === 0 ? `${data?.date ?? ''} 無 1 分鐘資料` :
+                   '按 ▶ 開始覆盤'}
+                </span>
+              )}
+            </div>
+
+            {/* Chart */}
+            <div className="flex-1 min-h-0 px-2">
+              <div ref={chartContainerRef} className="w-full h-full" />
+            </div>
+
+            {/* Transport controls */}
+            <div className="border-t border-border-c px-3 py-2 flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => setPlaying((p) => !p)}
+                disabled={bars.length === 0 || playhead >= bars.length}
+                className="px-3 py-1 text-sm font-bold rounded bg-accent text-black hover:bg-blue-400
+                           disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {playing ? '⏸ 暫停' : '▶ 播放'}
+              </button>
+              <button
+                onClick={reset}
+                disabled={bars.length === 0 || playhead === 0}
+                className="px-2 py-1 text-xs rounded border border-border-c text-text-s
+                           hover:text-text-p hover:border-accent disabled:opacity-40
+                           disabled:cursor-not-allowed transition-colors"
+              >
+                ⟲ 重置
+              </button>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-text-t mr-1">倍速</span>
+                {SPEEDS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSpeed(s)}
+                    className={`px-2 py-0.5 text-xs rounded font-mono transition-colors ${
+                      speed === s
+                        ? 'bg-amber-500/25 text-amber-300 border border-amber-400/60 font-bold'
+                        : 'border border-border-c text-text-s hover:text-text-p'
+                    }`}
+                  >
+                    {s}x
+                  </button>
+                ))}
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={bars.length}
+                value={playhead}
+                onChange={(e) => { setPlaying(false); setPlayhead(Number(e.target.value)); }}
+                disabled={bars.length === 0}
+                className="flex-1 min-w-[120px] accent-accent"
+              />
+            </div>
+          </div>
+
+          {/* Right: simulated trading panel */}
+          <div className="w-[260px] border-l border-border-c flex flex-col bg-card-bg/30">
+            <div className="px-3 py-2 border-b border-border-c">
+              <div className="text-xs text-text-t">模擬下單 / 練盤感</div>
+            </div>
+
+            {/* Position */}
+            <div className="px-3 py-2 border-b border-border-c text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-text-t">持有部位</span>
+                <span className="font-mono font-bold text-text-p">
+                  {position.qty > 0 ? `+${position.qty}` : position.qty} 張
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-t">平均成本</span>
+                <span className="font-mono text-text-p">
+                  {position.qty !== 0 ? position.avgCost.toFixed(2) : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-t">未實現損益</span>
+                <span className="font-mono font-bold"
+                      style={{ color: tone(livePnl) }}>
+                  {position.qty !== 0
+                    ? (livePnl >= 0 ? '+' : '') + livePnl.toFixed(2)
+                    : '—'}
+                </span>
+              </div>
+            </div>
+
+            {/* Order */}
+            <div className="px-3 py-2 border-b border-border-c space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-text-t">數量</span>
+                <input
+                  type="number" min={1} step={1}
+                  value={orderQty}
+                  onChange={(e) => setOrderQty(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="flex-1 text-xs bg-dash-bg border border-border-c rounded px-2 py-1
+                             text-text-p text-right font-mono focus:outline-none focus:border-accent"
+                />
+                <span className="text-xs text-text-t">張</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => submit('buy')}
+                  disabled={!currentBar}
+                  className="flex-1 py-1.5 text-sm font-bold rounded transition-colors
+                             disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    background: stock.market === 'US' ? '#00C851' : '#FF3B3B',
+                    color: '#fff',
+                  }}
+                >
+                  買 BUY
+                </button>
+                <button
+                  onClick={() => submit('sell')}
+                  disabled={!currentBar}
+                  className="flex-1 py-1.5 text-sm font-bold rounded transition-colors
+                             disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{
+                    background: stock.market === 'US' ? '#FF3B3B' : '#00C851',
+                    color: '#fff',
+                  }}
+                >
+                  賣 SELL
+                </button>
+              </div>
+              {position.qty !== 0 && (
+                <button
+                  onClick={flat}
+                  className="w-full py-1 text-xs rounded border border-border-c text-text-s
+                             hover:text-amber-300 hover:border-amber-400 transition-colors"
+                >
+                  平倉 ({position.qty > 0 ? '賣出' : '買回'} {Math.abs(position.qty)})
+                </button>
+              )}
+            </div>
+
+            {/* Trade log */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="px-3 py-2 text-xs text-text-t border-b border-border-c">
+                成交紀錄
+              </div>
+              {trades.length === 0 ? (
+                <div className="px-3 py-3 text-xs text-text-t">尚無成交</div>
+              ) : (
+                <table className="w-full text-[11px] font-mono">
+                  <tbody>
+                    {trades.map((t, i) => (
+                      <tr key={i} className="border-b border-border-c/50 hover:bg-card-bg">
+                        <td className="px-2 py-1 text-text-t">{t.time}</td>
+                        <td className="px-1 py-1">
+                          <span style={{
+                            color: t.side === 'buy'
+                              ? (stock.market === 'US' ? '#00C851' : '#FF3B3B')
+                              : (stock.market === 'US' ? '#FF3B3B' : '#00C851'),
+                            fontWeight: 'bold',
+                          }}>
+                            {t.side === 'buy' ? '買' : '賣'}
+                          </span>
+                        </td>
+                        <td className="px-1 py-1 text-right text-text-p">{t.qty}</td>
+                        <td className="px-2 py-1 text-right text-text-p">{t.price.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

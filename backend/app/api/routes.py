@@ -313,6 +313,59 @@ def get_klines(symbol: str, days: int = Query(default=1300, ge=1, le=1300)):
         conn.close()
 
 
+# ── Intraday 1-minute bars (used by the 覆盤 / replay UI) ──────────────────
+
+@router.get("/stocks/{symbol}/intraday")
+def get_stock_intraday(
+    symbol: str,
+    date: str | None = Query(default=None, description="YYYY-MM-DD; omit for latest"),
+):
+    """Return one trading day's worth of 1-minute bars for the symbol.
+
+    Source: yfinance's free 1m endpoint (last ~7 trading days). Each
+    (symbol, date) bundle is cached after the first fetch so the replay
+    UI can scrub / restart without re-hitting yfinance.
+    """
+    from app.services import intraday_service
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT market FROM stocks WHERE symbol = ?", (symbol,)
+        ).fetchone()
+    finally:
+        conn.close()
+    market = (row["market"] if row else "TW") or "TW"
+
+    try:
+        return intraday_service.get_intraday_bars(symbol, market, date)
+    except Exception as e:
+        logger.error(f"intraday {symbol} {date}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stocks/{symbol}/intraday/dates")
+def get_stock_intraday_dates(symbol: str):
+    """List up to 14 recent trading dates that have / will have intraday data
+    available (yfinance keeps ~7 days; cached older ones included)."""
+    from app.services import intraday_service
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT market FROM stocks WHERE symbol = ?", (symbol,)
+        ).fetchone()
+    finally:
+        conn.close()
+    market = (row["market"] if row else "TW") or "TW"
+
+    try:
+        return {"dates": intraday_service.list_available_dates(symbol, market)}
+    except Exception as e:
+        logger.error(f"intraday dates {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/dashboard")
 def get_dashboard(market: str = Query(default="TW", description="TW or US")):
     try:

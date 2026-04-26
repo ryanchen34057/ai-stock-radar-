@@ -102,10 +102,6 @@ export function ReplayModal({ stock, onClose }: Props) {
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const candleSeriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addCandlestickSeries']> | null>(null);
   const volumeSeriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addHistogramSeries']> | null>(null);
-  // Tracks how many closed bars are already on the candle series — lets the
-  // push-bars effect decide between update() (single new bar) and setData()
-  // (full re-seed after a scrub jump or chart re-creation).
-  const lastClosedCountRef = useRef<number>(0);
 
   /** Parse 'YYYY-MM-DDTHH:MM:SS' as if it were already UTC and return Unix
    *  seconds. lightweight-charts renders timestamps in UTC, so emitting the
@@ -156,37 +152,20 @@ export function ReplayModal({ stock, onClose }: Props) {
     });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } });
     volumeSeriesRef.current = vol;
-    lastClosedCountRef.current = 0;   // fresh series — reset push tracker
 
     return () => chart.remove();
   }, [stock.symbol, stock.market, data?.date]);
 
-  // When a new day's bars arrive: pre-seed the candle + volume series with
-  // a WHITESPACE point for every minute of the session, then lock the
-  // visible range to the full session.
-  //
-  // Why whitespace pre-seeding: lightweight-charts auto-fits the time axis
-  // around whatever data is currently on the series. If we only push bars
-  // as the playhead advances, every update() shrinks the visible range to
-  // the most-recent bar and shoves earlier bars off-screen — exactly the
-  // "only the latest candle shows" + "axis stuck near 09:05" symptoms.
-  // With whitespace pre-seeded, the time axis already spans 09:00→13:25,
-  // and subsequent update() calls just convert whitespace points into real
-  // candles in place, no auto-fit.
+  // When a new day's bars arrive, lock the time scale's visible range to
+  // the full session. The push-bars effect below replaces the entire data
+  // array on every render, which means lightweight-charts can't drift the
+  // time axis around — it always sees all 261 minutes. Without this lock
+  // the chart would auto-fit on the first setData; with it, we get a
+  // stable 09:00→13:25 axis that bars fill in left-to-right.
   useEffect(() => {
     const chart = chartRef.current;
-    const candle = candleSeriesRef.current;
-    const vol = volumeSeriesRef.current;
-    if (!chart || !candle || !vol || bars.length === 0) return;
-
-    candle.setData(bars.map((b) => ({ time: toUtcSeconds(b.time) as never })));
-    vol.setData(bars.map((b) => ({
-      time: toUtcSeconds(b.time) as never,
-      value: 0,
-      color: 'rgba(0,0,0,0)',
-    })));
-    lastClosedCountRef.current = 0;
-
+    if (!chart || bars.length === 0) return;
+    chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false });
     try {
       const fromT = toUtcSeconds(bars[0].time);
       const toT   = toUtcSeconds(bars[bars.length - 1].time);
@@ -224,57 +203,69 @@ export function ReplayModal({ stock, onClose }: Props) {
   const currentBar: IntradayBar | null = formingBar
     ?? (playhead > 0 ? bars[playhead - 1] : null);
 
-  // Push closed bars + the forming bar into the chart.
-  // The seed effect has already pre-populated the time axis with whitespace
-  // for every bar in the session, so each update() here just converts a
-  // whitespace slot into a real candle (or back, on backward scrubs).
+  // Push the WHOLE day's data array into both series on every render.
+  //
+  // Why setData instead of update(): lightweight-charts v4.2.3 only allows
+  // update() on the latest time point. We need to mutate ANY past minute
+  // (e.g. the forming bar grows over 12 sub-frames; backward scrubs need
+  // to "un-play" past bars). Replacing the whole array sidesteps this
+  // entirely — and because the array always covers all 261 minutes, the
+  // time axis stays stable instead of auto-fitting around new data.
+  //
+  // For each minute:
+  //   i <  playhead             → real OHLC (closed bar)
+  //   i === playhead && forming → interpolated forming bar
+  //   i >  playhead             → flat doji at open price (faint baseline)
   useEffect(() => {
     const candle = candleSeriesRef.current;
     const vol = volumeSeriesRef.current;
-    if (!candle || !vol || bars.length === 0) return;
+    const chart = chartRef.current;
+    if (!candle || !vol || !chart || bars.length === 0) return;
 
     const upVol   = stock.market === 'US' ? 'rgba(0,200,81,0.5)'  : 'rgba(255,59,59,0.5)';
     const downVol = stock.market === 'US' ? 'rgba(255,59,59,0.5)' : 'rgba(0,200,81,0.5)';
 
-    const closed = visibleBars;
-    const prevClosed = lastClosedCountRef.current;
-
-    // Backward scrub — convert un-played bars back to whitespace.
-    if (closed.length < prevClosed) {
-      for (let i = closed.length; i < prevClosed; i++) {
-        const b = bars[i];
-        if (!b) continue;
-        const t = toUtcSeconds(b.time);
-        candle.update({ time: t as never } as never);
-        vol.update({ time: t as never, value: 0, color: 'rgba(0,0,0,0)' } as never);
+    const candleData = bars.map((b, i) => {
+      const t = toUtcSeconds(b.time) as never;
+      if (i < playhead) {
+        return { time: t, open: b.open, high: b.high, low: b.low, close: b.close };
       }
-    }
+      if (i === playhead && formingBar) {
+        return {
+          time: t,
+          open: formingBar.open, high: formingBar.high,
+          low:  formingBar.low,  close: formingBar.close,
+        };
+      }
+      // Future bar — flat doji at open price (1-pixel baseline tick).
+      return { time: t, open: b.open, high: b.open, low: b.open, close: b.open };
+    });
 
-    // Forward — push any newly-closed bars.
-    for (let i = Math.min(prevClosed, closed.length); i < closed.length; i++) {
-      const b = closed[i];
-      const t = toUtcSeconds(b.time);
-      candle.update({ time: t as never, open: b.open, high: b.high, low: b.low, close: b.close });
-      vol.update({ time: t as never, value: b.volume, color: b.close >= b.open ? upVol : downVol });
-    }
-    lastClosedCountRef.current = closed.length;
+    const volData = bars.map((b, i) => {
+      const t = toUtcSeconds(b.time) as never;
+      if (i < playhead) {
+        return { time: t, value: b.volume, color: b.close >= b.open ? upVol : downVol };
+      }
+      if (i === playhead && formingBar) {
+        return {
+          time: t,
+          value: formingBar.volume,
+          color: formingBar.close >= formingBar.open ? upVol : downVol,
+        };
+      }
+      return { time: t, value: 0, color: 'rgba(0,0,0,0)' };
+    });
 
-    // Forming bar — overwrite each sub-frame so the latest candle visually
-    // grows from open price toward full OHLC like a live tick.
-    if (formingBar) {
-      const t = toUtcSeconds(formingBar.time);
-      candle.update({
-        time: t as never,
-        open: formingBar.open, high: formingBar.high,
-        low: formingBar.low, close: formingBar.close,
-      });
-      vol.update({
-        time: t as never,
-        value: formingBar.volume,
-        color: formingBar.close >= formingBar.open ? upVol : downVol,
-      });
-    }
-  }, [visibleBars, formingBar, stock.market, bars]);
+    candle.setData(candleData);
+    vol.setData(volData);
+
+    // setData can reset the visible range — re-apply the lock.
+    try {
+      const fromT = toUtcSeconds(bars[0].time);
+      const toT   = toUtcSeconds(bars[bars.length - 1].time);
+      chart.timeScale().setVisibleRange({ from: fromT as never, to: toT as never });
+    } catch { /* harmless if range can't be set this frame */ }
+  }, [bars, playhead, formingBar, stock.market]);
 
   // --- Simulated trading -------------------------------------------------
   const [orderQty, setOrderQty] = useState(1);

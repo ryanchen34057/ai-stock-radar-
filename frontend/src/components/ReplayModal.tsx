@@ -102,6 +102,10 @@ export function ReplayModal({ stock, onClose }: Props) {
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const candleSeriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addCandlestickSeries']> | null>(null);
   const volumeSeriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addHistogramSeries']> | null>(null);
+  // Tracks how many closed bars are already on the candle series — lets the
+  // push-bars effect decide between update() (single new bar) and setData()
+  // (full re-seed after a scrub jump or chart re-creation).
+  const lastClosedCountRef = useRef<number>(0);
 
   /** Parse 'YYYY-MM-DDTHH:MM:SS' as if it were already UTC and return Unix
    *  seconds. lightweight-charts renders timestamps in UTC, so emitting the
@@ -152,36 +156,27 @@ export function ReplayModal({ stock, onClose }: Props) {
     });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } });
     volumeSeriesRef.current = vol;
+    lastClosedCountRef.current = 0;   // fresh series — reset push tracker
 
     return () => chart.remove();
   }, [stock.symbol, stock.market, data?.date]);
 
   // When a new day's bars arrive, lock the chart's visible time range to the
-  // FULL session (e.g. 09:00 -> 13:30 for TW) and seed the price scale with
-  // the day's high/low. This way bars fill in left-to-right as the playhead
-  // advances instead of crowding to the right edge.
+  // FULL session so bars fill in left-to-right as the playhead advances
+  // instead of crowding to the right edge.
   useEffect(() => {
-    const candle = candleSeriesRef.current;
-    const vol = volumeSeriesRef.current;
     const chart = chartRef.current;
-    if (!candle || !vol || !chart || bars.length === 0) return;
-
-    candle.setData([]);
-    vol.setData([]);
-
-    const fromT = toUtcSeconds(bars[0].time);
-    const toT   = toUtcSeconds(bars[bars.length - 1].time);
-    chart.timeScale().setVisibleRange({ from: fromT as never, to: toT as never });
-
-    // Lock the price scale around the day's actual extremes so the empty
-    // chart still shows realistic price levels (helps the user orient
-    // before the first candle prints).
-    const dayHigh = Math.max(...bars.map((b) => b.high));
-    const dayLow  = Math.min(...bars.map((b) => b.low));
-    const pad = (dayHigh - dayLow) * 0.05;
-    candle.applyOptions({ autoscaleInfoProvider: () => ({
-      priceRange: { minValue: dayLow - pad, maxValue: dayHigh + pad },
-    })});
+    if (!chart || bars.length === 0) return;
+    try {
+      const fromT = toUtcSeconds(bars[0].time);
+      const toT   = toUtcSeconds(bars[bars.length - 1].time);
+      chart.timeScale().setVisibleRange({ from: fromT as never, to: toT as never });
+    } catch (err) {
+      // Some lightweight-charts builds throw if the range is set before any
+      // data is on the series. Falling through means the chart will just
+      // auto-fit; not pretty but not broken.
+      console.warn('replay: setVisibleRange failed', err);
+    }
   }, [bars]);
 
   // The "current" bar visible to the user — the forming one when there is
@@ -213,7 +208,6 @@ export function ReplayModal({ stock, onClose }: Props) {
     ?? (playhead > 0 ? bars[playhead - 1] : null);
 
   // Push closed bars + the forming bar into the chart.
-  const lastClosedCountRef = useRef<number>(0);
   useEffect(() => {
     const candle = candleSeriesRef.current;
     const vol = volumeSeriesRef.current;
@@ -385,12 +379,16 @@ export function ReplayModal({ stock, onClose }: Props) {
                   </span>
                   <span className="text-xs text-text-s">
                     高 <span className="font-mono" style={{ color: tone(1) }}>
-                      {Math.max(...visibleBars.map((b) => b.high)).toFixed(2)}
+                      {(visibleBars.length
+                        ? Math.max(...visibleBars.map((b) => b.high))
+                        : currentBar.high).toFixed(2)}
                     </span>
                   </span>
                   <span className="text-xs text-text-s">
                     低 <span className="font-mono" style={{ color: tone(-1) }}>
-                      {Math.min(...visibleBars.map((b) => b.low)).toFixed(2)}
+                      {(visibleBars.length
+                        ? Math.min(...visibleBars.map((b) => b.low))
+                        : currentBar.low).toFixed(2)}
                     </span>
                   </span>
                   <span className="text-xs text-text-s">

@@ -340,11 +340,55 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
     [stock, fullKlines],
   );
 
+  // Navigation across the filtered/sorted stock list — used by header
+  // buttons, the floating side arrows, and the ←/→ keyboard shortcut.
+  const navIdx = visibleSymbols.indexOf(stock.symbol);
+  const navTotal = visibleSymbols.length;
+  const canNav = navIdx >= 0 && navTotal > 1;
+  const goto = (delta: number) => {
+    if (!canNav) return;
+    const nextIdx = (navIdx + delta + navTotal) % navTotal;
+    const next = stocks.find((s) => s.symbol === visibleSymbols[nextIdx]);
+    if (next) setSelectedStock(next);
+  };
+
   return (
     <div
       className={`fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 ${stock.market === 'US' ? 'market-us' : ''}`}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
+      {/* Floating side arrows — hint the user can ←/→ to step through the
+          filtered list. Sit outside the modal panel so they don't crowd the
+          header. Clicks stop-propagation to avoid the backdrop close. */}
+      {canNav && (
+        <>
+          <button
+            onClick={(e) => { e.stopPropagation(); goto(-1); }}
+            title="上一檔 (←)"
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10
+                       w-10 h-16 sm:w-12 sm:h-20
+                       flex items-center justify-center
+                       text-2xl sm:text-3xl text-text-s hover:text-accent
+                       bg-card-bg/80 hover:bg-card-bg border border-border-c
+                       rounded-r-lg shadow-lg backdrop-blur transition-colors"
+          >
+            ‹
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); goto(1); }}
+            title="下一檔 (→)"
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10
+                       w-10 h-16 sm:w-12 sm:h-20
+                       flex items-center justify-center
+                       text-2xl sm:text-3xl text-text-s hover:text-accent
+                       bg-card-bg/80 hover:bg-card-bg border border-border-c
+                       rounded-l-lg shadow-lg backdrop-blur transition-colors"
+          >
+            ›
+          </button>
+        </>
+      )}
+
       <div className="bg-dash-bg border border-border-c rounded-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border-c">
@@ -364,46 +408,11 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
             )}
           </div>
           <div className="flex items-center gap-1">
-            {(() => {
-              const idx = visibleSymbols.indexOf(stock.symbol);
-              const total = visibleSymbols.length;
-              const hasNav = idx >= 0 && total > 1;
-              const goto = (delta: number) => {
-                if (!hasNav) return;
-                const nextIdx = (idx + delta + total) % total;
-                const next = stocks.find((s) => s.symbol === visibleSymbols[nextIdx]);
-                if (next) setSelectedStock(next);
-              };
-              return (
-                <>
-                  {hasNav && (
-                    <span className="text-[11px] text-text-t font-mono mr-2 hidden sm:inline">
-                      {idx + 1} / {total} · ←/→ 切換
-                    </span>
-                  )}
-                  <button
-                    onClick={() => goto(-1)}
-                    disabled={!hasNav}
-                    title="上一檔 (←)"
-                    className="text-text-s hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed
-                               text-base w-8 h-8 flex items-center justify-center
-                               rounded hover:bg-card-bg transition-colors"
-                  >
-                    ‹
-                  </button>
-                  <button
-                    onClick={() => goto(1)}
-                    disabled={!hasNav}
-                    title="下一檔 (→)"
-                    className="text-text-s hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed
-                               text-base w-8 h-8 flex items-center justify-center
-                               rounded hover:bg-card-bg transition-colors"
-                  >
-                    ›
-                  </button>
-                </>
-              );
-            })()}
+            {canNav && (
+              <span className="text-[11px] text-text-t font-mono mr-2 hidden sm:inline">
+                {navIdx + 1} / {navTotal} · ←/→ 切換
+              </span>
+            )}
             <button
               onClick={onClose}
               title="關閉 (Esc)"

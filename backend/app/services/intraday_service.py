@@ -16,6 +16,7 @@ import logging
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
+import pandas as pd
 import yfinance as yf
 
 from app.database import get_connection
@@ -27,6 +28,15 @@ logger = logging.getLogger(__name__)
 SUPPORTED_INTERVALS = {"1m", "5m", "15m", "30m", "60m"}
 
 
+def _interval_minutes(interval: str) -> int:
+    """Parse '5m', '60m' etc. into minutes."""
+    if interval.endswith("m"):
+        return int(interval[:-1])
+    if interval.endswith("h"):
+        return int(interval[:-1]) * 60
+    return 1
+
+
 def _yf_symbol(symbol: str, market: str) -> str:
     """Match the suffix convention used by stock_service.py."""
     if market.upper() == "US":
@@ -35,13 +45,20 @@ def _yf_symbol(symbol: str, market: str) -> str:
     return f"{symbol}.TW" if "." not in symbol else symbol
 
 
-def _ensure_table(conn: sqlite3.Connection) -> None:
-    """Create the cache table; migrate from the pre-interval schema if needed.
+# Bump when the on-disk JSON format of cached bars changes — the migrator
+# below clears the cache when the recorded version doesn't match. Version
+# history:
+#   1 — initial (1m only, PK (symbol, date))
+#   2 — multi-interval (PK (symbol, date, interval))
+#   3 — bar timestamps shifted to close-time labels (was start-time)
+_CACHE_VERSION = "3"
 
-    Old schema had PK (symbol, date) — fine for 1m only. The new schema
-    keys on (symbol, date, interval) so the same day can be cached at
-    multiple intervals. Cache content is regenerable, so on schema change
-    we just drop and rebuild rather than copy old rows over.
+
+def _ensure_table(conn: sqlite3.Connection) -> None:
+    """Create the cache + meta tables; clear cache when format changes.
+
+    Cache content is fully regenerable from yfinance, so on any schema or
+    data-format change we just wipe rather than try to migrate values.
     """
     cur = conn.execute("PRAGMA table_info(intraday_cache)")
     cols = [r[1] for r in cur.fetchall()]
@@ -59,24 +76,46 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
               PRIMARY KEY (symbol, date, interval)
            )"""
     )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS intraday_cache_meta (
+              key TEXT PRIMARY KEY,
+              value TEXT
+           )"""
+    )
+
+    row = conn.execute(
+        "SELECT value FROM intraday_cache_meta WHERE key = 'version'"
+    ).fetchone()
+    cur_ver = row["value"] if row else None
+    if cur_ver != _CACHE_VERSION:
+        conn.execute("DELETE FROM intraday_cache")
+        conn.execute(
+            "INSERT OR REPLACE INTO intraday_cache_meta (key, value) VALUES ('version', ?)",
+            (_CACHE_VERSION,),
+        )
+
     conn.commit()
 
 
-def _df_to_bars(df) -> list[dict]:
-    """Convert a yfinance 1-min history DataFrame into a JSON-friendly list.
+def _df_to_bars(df, interval: str = "1m") -> list[dict]:
+    """Convert a yfinance intraday DataFrame into a JSON-friendly list.
 
-    Times are emitted as ISO 8601 strings in their native exchange tz so the
-    frontend can show '09:00 / 09:30' without needing tz-conversion logic.
+    yfinance timestamps each bar by its START time (e.g. a 5m bar covering
+    09:00:00–09:04:59 is indexed at 09:00). Local broker convention in TW
+    labels intraday bars by their CLOSE time — that 5m bar should display
+    as 09:05. We shift here once at ingestion so every downstream consumer
+    (chart axis, trade log, header clock) sees the close-time label.
     """
     out: list[dict] = []
     if df is None or len(df) == 0:
         return out
+    delta = pd.Timedelta(minutes=_interval_minutes(interval))
     for ts, row in df.iterrows():
         # Drop bars where any OHLC is NaN (yfinance pads gaps with NaNs)
         if any(row[c] != row[c] for c in ("Open", "High", "Low", "Close")):  # NaN check
             continue
         out.append({
-            "time": ts.strftime("%Y-%m-%dT%H:%M:%S"),
+            "time": (ts + delta).strftime("%Y-%m-%dT%H:%M:%S"),
             "open":  float(row["Open"]),
             "high":  float(row["High"]),
             "low":   float(row["Low"]),
@@ -115,7 +154,7 @@ def _fetch_one_day(symbol: str, market: str, date_str: str, interval: str) -> li
         except Exception:
             df = None
 
-    bars = _df_to_bars(df)
+    bars = _df_to_bars(df, interval)
     # Filter to that date only (defensive — start/end window is exclusive
     # but tz boundaries can sometimes pull in bars from the next session).
     bars = [b for b in bars if b["time"][:10] == date_str]

@@ -72,8 +72,19 @@ export function ReplayModal({ stock, onClose }: Props) {
   // The most-recent bar animates toward its full OHLC over the slot's
   // duration to mimic real-time tick formation — split each minute into
   // SUBFRAMES sub-frames and interpolate.
-  const SUBFRAMES = 12;
   const [formingProgress, setFormingProgress] = useState(0);
+
+  // Sub-frames per bar are computed from the chosen speed so each tick
+  // lands on a ~16ms slot (≈60fps). A fixed 12 sub-frames left the
+  // chart updating only twice per second at 10×, which read as
+  // "freeze, jump, freeze, jump" instead of smooth scrolling. Cap on
+  // both ends: at least 12 (so the 3-phase forming animation has
+  // enough resolution at 60×) and at most 240 (a paranoia cap so an
+  // accidental 1× setting doesn't queue thousands of timers per bar).
+  const SUBFRAMES = useMemo(() => {
+    const intervalMs = REAL_MS_PER_BAR / speed;
+    return Math.max(12, Math.min(240, Math.round(intervalMs / 16)));
+  }, [speed]);
 
   // Track the real-world time the playhead is currently at, so when the
   // bar set changes (interval switch) we can re-anchor the playhead to

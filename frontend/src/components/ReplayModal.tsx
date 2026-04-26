@@ -161,20 +161,37 @@ export function ReplayModal({ stock, onClose }: Props) {
     return () => chart.remove();
   }, [stock.symbol, stock.market, data?.date]);
 
-  // When a new day's bars arrive, lock the chart's visible time range to the
-  // FULL session so bars fill in left-to-right as the playhead advances
-  // instead of crowding to the right edge.
+  // When a new day's bars arrive: pre-seed the candle + volume series with
+  // a WHITESPACE point for every minute of the session, then lock the
+  // visible range to the full session.
+  //
+  // Why whitespace pre-seeding: lightweight-charts auto-fits the time axis
+  // around whatever data is currently on the series. If we only push bars
+  // as the playhead advances, every update() shrinks the visible range to
+  // the most-recent bar and shoves earlier bars off-screen — exactly the
+  // "only the latest candle shows" + "axis stuck near 09:05" symptoms.
+  // With whitespace pre-seeded, the time axis already spans 09:00→13:25,
+  // and subsequent update() calls just convert whitespace points into real
+  // candles in place, no auto-fit.
   useEffect(() => {
     const chart = chartRef.current;
-    if (!chart || bars.length === 0) return;
+    const candle = candleSeriesRef.current;
+    const vol = volumeSeriesRef.current;
+    if (!chart || !candle || !vol || bars.length === 0) return;
+
+    candle.setData(bars.map((b) => ({ time: toUtcSeconds(b.time) as never })));
+    vol.setData(bars.map((b) => ({
+      time: toUtcSeconds(b.time) as never,
+      value: 0,
+      color: 'rgba(0,0,0,0)',
+    })));
+    lastClosedCountRef.current = 0;
+
     try {
       const fromT = toUtcSeconds(bars[0].time);
       const toT   = toUtcSeconds(bars[bars.length - 1].time);
       chart.timeScale().setVisibleRange({ from: fromT as never, to: toT as never });
     } catch (err) {
-      // Some lightweight-charts builds throw if the range is set before any
-      // data is on the series. Falling through means the chart will just
-      // auto-fit; not pretty but not broken.
       console.warn('replay: setVisibleRange failed', err);
     }
   }, [bars]);
@@ -208,46 +225,42 @@ export function ReplayModal({ stock, onClose }: Props) {
     ?? (playhead > 0 ? bars[playhead - 1] : null);
 
   // Push closed bars + the forming bar into the chart.
+  // The seed effect has already pre-populated the time axis with whitespace
+  // for every bar in the session, so each update() here just converts a
+  // whitespace slot into a real candle (or back, on backward scrubs).
   useEffect(() => {
     const candle = candleSeriesRef.current;
     const vol = volumeSeriesRef.current;
-    if (!candle || !vol) return;
+    if (!candle || !vol || bars.length === 0) return;
 
     const upVol   = stock.market === 'US' ? 'rgba(0,200,81,0.5)'  : 'rgba(255,59,59,0.5)';
     const downVol = stock.market === 'US' ? 'rgba(255,59,59,0.5)' : 'rgba(0,200,81,0.5)';
 
-    const closed = visibleBars; // first `playhead` bars are fully closed
+    const closed = visibleBars;
     const prevClosed = lastClosedCountRef.current;
 
-    if (closed.length === 0 && prevClosed > 0) {
-      // Reset
-      candle.setData([]);
-      vol.setData([]);
-    } else if (closed.length === prevClosed + 1) {
-      // Single new closed bar appended (forming bar just committed) — push
-      // its FINAL OHLC in place via update().
-      const b = closed[closed.length - 1];
+    // Backward scrub — convert un-played bars back to whitespace.
+    if (closed.length < prevClosed) {
+      for (let i = closed.length; i < prevClosed; i++) {
+        const b = bars[i];
+        if (!b) continue;
+        const t = toUtcSeconds(b.time);
+        candle.update({ time: t as never } as never);
+        vol.update({ time: t as never, value: 0, color: 'rgba(0,0,0,0)' } as never);
+      }
+    }
+
+    // Forward — push any newly-closed bars.
+    for (let i = Math.min(prevClosed, closed.length); i < closed.length; i++) {
+      const b = closed[i];
       const t = toUtcSeconds(b.time);
       candle.update({ time: t as never, open: b.open, high: b.high, low: b.low, close: b.close });
       vol.update({ time: t as never, value: b.volume, color: b.close >= b.open ? upVol : downVol });
-    } else if (closed.length !== prevClosed) {
-      // Scrub jump — re-seed all closed bars from scratch.
-      candle.setData(closed.map((b) => ({
-        time: toUtcSeconds(b.time) as never,
-        open: b.open, high: b.high, low: b.low, close: b.close,
-      })));
-      vol.setData(closed.map((b) => ({
-        time: toUtcSeconds(b.time) as never,
-        value: b.volume,
-        color: b.close >= b.open ? upVol : downVol,
-      })));
     }
-    // (closed.length === prevClosed && both > 0) is the common forming-frame
-    // case — closed bars unchanged, only the forming bar below needs an update.
     lastClosedCountRef.current = closed.length;
 
-    // Forming bar — overwrite each frame via update() so the latest candle
-    // visually grows / shrinks like a live tick.
+    // Forming bar — overwrite each sub-frame so the latest candle visually
+    // grows from open price toward full OHLC like a live tick.
     if (formingBar) {
       const t = toUtcSeconds(formingBar.time);
       candle.update({
@@ -261,7 +274,7 @@ export function ReplayModal({ stock, onClose }: Props) {
         color: formingBar.close >= formingBar.open ? upVol : downVol,
       });
     }
-  }, [visibleBars, formingBar, stock.market]);
+  }, [visibleBars, formingBar, stock.market, bars]);
 
   // --- Simulated trading -------------------------------------------------
   const [orderQty, setOrderQty] = useState(1);

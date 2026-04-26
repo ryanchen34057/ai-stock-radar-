@@ -225,6 +225,9 @@ export function ReplayModal({ stock, onClose }: Props) {
     const upVol   = stock.market === 'US' ? 'rgba(0,200,81,0.5)'  : 'rgba(255,59,59,0.5)';
     const downVol = stock.market === 'US' ? 'rgba(255,59,59,0.5)' : 'rgba(0,200,81,0.5)';
 
+    // Future bars are pure whitespace (just a time slot, nothing drawn) so
+    // the user can't preview where price will go — but the time axis still
+    // spans the full session because every minute is represented.
     const candleData = bars.map((b, i) => {
       const t = toUtcSeconds(b.time) as never;
       if (i < playhead) {
@@ -237,8 +240,7 @@ export function ReplayModal({ stock, onClose }: Props) {
           low:  formingBar.low,  close: formingBar.close,
         };
       }
-      // Future bar — flat doji at open price (1-pixel baseline tick).
-      return { time: t, open: b.open, high: b.open, low: b.open, close: b.open };
+      return { time: t };   // whitespace
     });
 
     const volData = bars.map((b, i) => {
@@ -253,7 +255,7 @@ export function ReplayModal({ stock, onClose }: Props) {
           color: formingBar.close >= formingBar.open ? upVol : downVol,
         };
       }
-      return { time: t, value: 0, color: 'rgba(0,0,0,0)' };
+      return { time: t };   // whitespace
     });
 
     candle.setData(candleData);

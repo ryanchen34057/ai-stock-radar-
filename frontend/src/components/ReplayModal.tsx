@@ -35,10 +35,11 @@ const INTERVALS: { value: IntradayInterval; label: string }[] = [
   { value: '60m', label: '60分' },
 ];
 
-// Real-world ms per simulated bar at 1×. We keep this constant regardless
-// of the candle interval — at 1× a 1m bar takes 60s wall time and so does
-// a 60m bar; the speed multiplier is the user's lever for quicker review.
-const REAL_MS_PER_BAR = 60_000;
+// Real-world ms per simulated MINUTE of market time at 1×. At 1× one
+// minute of market time takes 60s of wall time, so a 1m bar plays in
+// 60s, a 5m bar in 5min, a 60m bar in 60min. The speed multiplier
+// scales the wall time down (60× → a 1m bar plays in 1s).
+const REAL_MS_PER_MIN = 60_000;
 
 // How many bars to keep visible at once. Smaller = wider candles + less
 // historic context. 40 gives roughly 25px per bar on a typical desktop
@@ -67,24 +68,11 @@ export function ReplayModal({ stock, onClose }: Props) {
   const [playhead, setPlayhead] = useState(0);          // # of bars revealed (0..bars.length)
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<Speed>(10);
-  const tickRef = useRef<number | null>(null);
 
   // The most-recent bar animates toward its full OHLC over the slot's
   // duration to mimic real-time tick formation — split each minute into
   // SUBFRAMES sub-frames and interpolate.
   const [formingProgress, setFormingProgress] = useState(0);
-
-  // Sub-frames per bar are computed from the chosen speed so each tick
-  // lands on a ~16ms slot (≈60fps). A fixed 12 sub-frames left the
-  // chart updating only twice per second at 10×, which read as
-  // "freeze, jump, freeze, jump" instead of smooth scrolling. Cap on
-  // both ends: at least 12 (so the 3-phase forming animation has
-  // enough resolution at 60×) and at most 240 (a paranoia cap so an
-  // accidental 1× setting doesn't queue thousands of timers per bar).
-  const SUBFRAMES = useMemo(() => {
-    const intervalMs = REAL_MS_PER_BAR / speed;
-    return Math.max(12, Math.min(240, Math.round(intervalMs / 16)));
-  }, [speed]);
 
   // Track the real-world time the playhead is currently at, so when the
   // bar set changes (interval switch) we can re-anchor the playhead to
@@ -129,35 +117,47 @@ export function ReplayModal({ stock, onClose }: Props) {
     setPlaying(false);
   }, [data]);
 
-  // Drive the playhead forward at the chosen speed. Every sub-frame nudges
-  // formingProgress; on the final sub-frame the bar is committed to playhead
-  // and progress resets.
+  // Drive the playhead forward at the chosen speed using requestAnimationFrame.
+  //
+  // Compared to setInterval-with-fixed-tick: rAF runs on every browser
+  // paint (~60fps natural cadence), and we derive formingProgress from
+  // *actual elapsed wall-time* rather than counting ticks. This means the
+  // animation stays smooth at any speed and self-corrects when the page
+  // is busy — long frames don't stall the playhead, they just skip to
+  // the right progress on the next frame.
   useEffect(() => {
     if (!playing || bars.length === 0) return;
-    const intervalMs = REAL_MS_PER_BAR / speed;     // ms of real time per bar
-    const frameMs = Math.max(16, intervalMs / SUBFRAMES);
+    const m = tf.match(/^(\d+)m$/);
+    const minutesPerBar = m ? parseInt(m[1], 10) : 1;
+    const intervalMs = (REAL_MS_PER_MIN * minutesPerBar) / speed;
+    let rafId = 0;
+    let barStart = performance.now();
 
-    const id = window.setInterval(() => {
-      setFormingProgress((p) => {
-        const next = p + 1 / SUBFRAMES;
-        if (next >= 1) {
-          // Commit current forming bar -> closed; advance playhead.
-          setPlayhead((ph) => {
-            const advance = ph + 1;
-            if (advance >= bars.length) {
-              setPlaying(false);
-              return bars.length;
-            }
-            return advance;
-          });
-          return 0;
-        }
-        return next;
-      });
-    }, frameMs);
-    tickRef.current = id;
-    return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
-  }, [playing, speed, bars.length]);
+    const tick = () => {
+      const now = performance.now();
+      const progress = (now - barStart) / intervalMs;
+      if (progress >= 1) {
+        // Commit current bar; carry remainder into the next bar so we
+        // don't lose time at slow speeds with long frames.
+        const overflow = (now - barStart) - intervalMs;
+        barStart = now - Math.max(0, overflow);
+        setPlayhead((ph) => {
+          const advance = ph + 1;
+          if (advance >= bars.length) {
+            setPlaying(false);
+            return bars.length;
+          }
+          return advance;
+        });
+        setFormingProgress(0);
+      } else {
+        setFormingProgress(progress);
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [playing, speed, bars.length, tf]);
 
   // Visible bars = first `playhead` bars (playhead=0 shows nothing yet).
   // These are the FULLY CLOSED bars; the active forming bar is bars[playhead].

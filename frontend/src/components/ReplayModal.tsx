@@ -114,6 +114,19 @@ export function ReplayModal({ stock, onClose }: Props) {
     return Date.UTC(y, mo - 1, da, h, mi, s || 0) / 1000;
   };
 
+  /** Synthetic / compressed timestamps. Thinly-traded stocks have minutes
+   *  with no trades — yfinance simply omits those minutes, so a chart that
+   *  positions bars by their real time ends up with ugly empty gaps (e.g.
+   *  6531 愛普 trades at 09:00, then nothing until 09:30). We re-base each
+   *  bar on a synthetic 1-minute grid so they sit edge-to-edge on the chart,
+   *  while a tickMarkFormatter still shows the REAL time on the axis. */
+  const baseSeconds = bars.length > 0 ? toUtcSeconds(bars[0].time) : 0;
+  const synthSeconds = (i: number) => baseSeconds + i * 60;
+  const realTimeForSynth = (synth: number): string | null => {
+    const i = Math.round((synth - baseSeconds) / 60);
+    return bars[i]?.time ?? null;
+  };
+
   // Build the chart once per (stock, date) — colour scheme follows the
   // market convention used elsewhere (TW = red-up, US = green-up).
   useEffect(() => {
@@ -156,20 +169,26 @@ export function ReplayModal({ stock, onClose }: Props) {
     return () => chart.remove();
   }, [stock.symbol, stock.market, data?.date]);
 
-  // When a new day's bars arrive, lock the time scale's visible range to
-  // the full session. The push-bars effect below replaces the entire data
-  // array on every render, which means lightweight-charts can't drift the
-  // time axis around — it always sees all 261 minutes. Without this lock
-  // the chart would auto-fit on the first setData; with it, we get a
-  // stable 09:00→13:25 axis that bars fill in left-to-right.
+  // When a new day's bars arrive: lock the time scale's visible range to
+  // the full SYNTHETIC session and install a tickMarkFormatter that maps
+  // synthetic seconds back to the bar's real time string for axis labels.
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || bars.length === 0) return;
-    chart.timeScale().applyOptions({ shiftVisibleRangeOnNewBar: false });
+    // tickMarkFormatter is a TimeScaleOptions field but applyOptions is
+    // typed against the narrower HorzScaleOptions; cast to satisfy TS.
+    chart.timeScale().applyOptions({
+      shiftVisibleRangeOnNewBar: false,
+      tickMarkFormatter: (time: number) => {
+        const real = realTimeForSynth(time);
+        return real ? real.slice(11, 16) : '';
+      },
+    } as never);
     try {
-      const fromT = toUtcSeconds(bars[0].time);
-      const toT   = toUtcSeconds(bars[bars.length - 1].time);
-      chart.timeScale().setVisibleRange({ from: fromT as never, to: toT as never });
+      chart.timeScale().setVisibleRange({
+        from: synthSeconds(0) as never,
+        to: synthSeconds(bars.length - 1) as never,
+      });
     } catch (err) {
       console.warn('replay: setVisibleRange failed', err);
     }
@@ -228,8 +247,11 @@ export function ReplayModal({ stock, onClose }: Props) {
     // Future bars are pure whitespace (just a time slot, nothing drawn) so
     // the user can't preview where price will go — but the time axis still
     // spans the full session because every minute is represented.
+    // Time encoding is SYNTHETIC (1 minute per bar regardless of real-time
+    // gaps) so bars sit edge-to-edge instead of stranding lone bars far
+    // from the rest after illiquid stretches.
     const candleData = bars.map((b, i) => {
-      const t = toUtcSeconds(b.time) as never;
+      const t = synthSeconds(i) as never;
       if (i < playhead) {
         return { time: t, open: b.open, high: b.high, low: b.low, close: b.close };
       }
@@ -244,7 +266,7 @@ export function ReplayModal({ stock, onClose }: Props) {
     });
 
     const volData = bars.map((b, i) => {
-      const t = toUtcSeconds(b.time) as never;
+      const t = synthSeconds(i) as never;
       if (i < playhead) {
         return { time: t, value: b.volume, color: b.close >= b.open ? upVol : downVol };
       }
@@ -263,9 +285,10 @@ export function ReplayModal({ stock, onClose }: Props) {
 
     // setData can reset the visible range — re-apply the lock.
     try {
-      const fromT = toUtcSeconds(bars[0].time);
-      const toT   = toUtcSeconds(bars[bars.length - 1].time);
-      chart.timeScale().setVisibleRange({ from: fromT as never, to: toT as never });
+      chart.timeScale().setVisibleRange({
+        from: synthSeconds(0) as never,
+        to: synthSeconds(bars.length - 1) as never,
+      });
     } catch { /* harmless if range can't be set this frame */ }
   }, [bars, playhead, formingBar, stock.market]);
 

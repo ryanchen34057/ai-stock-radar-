@@ -40,6 +40,13 @@ const INTERVALS: { value: IntradayInterval; label: string }[] = [
 // a 60m bar; the speed multiplier is the user's lever for quicker review.
 const REAL_MS_PER_BAR = 60_000;
 
+// How many bars to keep visible at once. Smaller = wider candles + less
+// historic context. ~80 gives roughly 12px per bar on a typical desktop
+// chart width, which reads as comfortably distinct candles rather than
+// the thin pixel-strips you get when the whole session is forced into
+// the viewport.
+const WINDOW_BARS = 80;
+
 interface SimTrade {
   bar: number;
   time: string;
@@ -183,9 +190,10 @@ export function ReplayModal({ stock, onClose }: Props) {
     return () => chart.remove();
   }, [stock.symbol, stock.market, data?.date]);
 
-  // When a new day's bars arrive: lock the time scale's visible range to
-  // the full SYNTHETIC session and install a tickMarkFormatter that maps
-  // synthetic seconds back to the bar's real time string for axis labels.
+  // When a new day's bars arrive: install the tickMarkFormatter that
+  // maps synthetic seconds back to the bar's real time string. The
+  // visible logical range itself is driven by the push-bars effect
+  // below as the playhead advances (sliding window).
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || bars.length === 0) return;
@@ -198,14 +206,6 @@ export function ReplayModal({ stock, onClose }: Props) {
         return real ? real.slice(11, 16) : '';
       },
     } as never);
-    try {
-      chart.timeScale().setVisibleRange({
-        from: synthSeconds(0) as never,
-        to: synthSeconds(bars.length - 1) as never,
-      });
-    } catch (err) {
-      console.warn('replay: setVisibleRange failed', err);
-    }
   }, [bars]);
 
   // The "current" bar visible to the user — the forming one when there is
@@ -297,11 +297,22 @@ export function ReplayModal({ stock, onClose }: Props) {
     candle.setData(candleData);
     vol.setData(volData);
 
-    // setData can reset the visible range — re-apply the lock.
+    // Sliding window — keep ~70% historic context to the left of the
+    // playhead and ~30% future runway to the right, so as bars play in
+    // the chart auto-scrolls. Until the playhead has produced enough
+    // bars to fill that historic share, anchor the window to bar 0.
+    const lookback = Math.floor(WINDOW_BARS * 0.7);
+    const lookahead = WINDOW_BARS - lookback;
+    const from = Math.max(0, playhead - lookback);
+    const to   = Math.min(bars.length - 1, from + WINDOW_BARS - 1);
+    // Recompute `from` if `to` was clamped, so the window keeps its size
+    // even at the right edge of the day.
+    const fromAdj = Math.max(0, to - WINDOW_BARS + 1);
+    void lookahead;   // documented above; not used after `to` clamp
     try {
-      chart.timeScale().setVisibleRange({
-        from: synthSeconds(0) as never,
-        to: synthSeconds(bars.length - 1) as never,
+      chart.timeScale().setVisibleLogicalRange({
+        from: fromAdj as never,
+        to:   (to + 1) as never,    // half-open at the right
       });
     } catch { /* harmless if range can't be set this frame */ }
   }, [bars, playhead, formingBar, stock.market]);

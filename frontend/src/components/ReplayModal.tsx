@@ -35,11 +35,12 @@ const INTERVALS: { value: IntradayInterval; label: string }[] = [
   { value: '60m', label: '60分' },
 ];
 
-// Real-world ms per simulated MINUTE of market time at 1×. At 1× one
-// minute of market time takes 60s of wall time, so a 1m bar plays in
-// 60s, a 5m bar in 5min, a 60m bar in 60min. The speed multiplier
-// scales the wall time down (60× → a 1m bar plays in 1s).
-const REAL_MS_PER_MIN = 60_000;
+// Real-world ms per bar at 1×, regardless of the candle interval.
+// Treat each bar as a fixed unit of "tick time" the way live broker
+// software updates — 12 ticks/bar at the TW continuous-trading 5-sec
+// cadence ≈ 60s/bar at 1×. The speed multiplier just scales this
+// down: 10× → 6s/bar, 60× → 1s/bar.
+const REAL_MS_PER_BAR = 60_000;
 
 // How many bars to keep visible at once. Smaller = wider candles + less
 // historic context. 40 gives roughly 25px per bar on a typical desktop
@@ -127,9 +128,7 @@ export function ReplayModal({ stock, onClose }: Props) {
   // the right progress on the next frame.
   useEffect(() => {
     if (!playing || bars.length === 0) return;
-    const m = tf.match(/^(\d+)m$/);
-    const minutesPerBar = m ? parseInt(m[1], 10) : 1;
-    const intervalMs = (REAL_MS_PER_MIN * minutesPerBar) / speed;
+    const intervalMs = REAL_MS_PER_BAR / speed;
     let rafId = 0;
     let barStart = performance.now();
 
@@ -157,7 +156,7 @@ export function ReplayModal({ stock, onClose }: Props) {
     };
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [playing, speed, bars.length, tf]);
+  }, [playing, speed, bars.length]);
 
   // Visible bars = first `playhead` bars (playhead=0 shows nothing yet).
   // These are the FULLY CLOSED bars; the active forming bar is bars[playhead].

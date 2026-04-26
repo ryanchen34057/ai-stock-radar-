@@ -14,7 +14,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import type { StockData } from '../types/stock';
-import { useIntradayBars, useIntradayDates, type IntradayBar } from '../hooks/useIntradayBars';
+import {
+  useIntradayBars, useIntradayDates,
+  type IntradayBar, type IntradayInterval,
+} from '../hooks/useIntradayBars';
 
 interface Props {
   stock: StockData;
@@ -24,7 +27,17 @@ interface Props {
 const SPEEDS = [1, 5, 10, 30, 60] as const;
 type Speed = typeof SPEEDS[number];
 
-// Real-world ms per simulated 1-minute bar at 1× = 60 000.
+const INTERVALS: { value: IntradayInterval; label: string }[] = [
+  { value: '1m',  label: '1分'  },
+  { value: '5m',  label: '5分'  },
+  { value: '15m', label: '15分' },
+  { value: '30m', label: '30分' },
+  { value: '60m', label: '60分' },
+];
+
+// Real-world ms per simulated bar at 1×. We keep this constant regardless
+// of the candle interval — at 1× a 1m bar takes 60s wall time and so does
+// a 60m bar; the speed multiplier is the user's lever for quicker review.
 const REAL_MS_PER_BAR = 60_000;
 
 interface SimTrade {
@@ -36,10 +49,11 @@ interface SimTrade {
 }
 
 export function ReplayModal({ stock, onClose }: Props) {
-  // --- Date selection ----------------------------------------------------
-  const { dates } = useIntradayDates(stock.symbol);
+  // --- Date + interval selection ----------------------------------------
+  const [tf, setTf] = useState<IntradayInterval>('1m');   // K-bar timeframe
+  const { dates } = useIntradayDates(stock.symbol, tf);
   const [date, setDate] = useState<string | undefined>(undefined);   // undefined = latest
-  const { data, loading, error } = useIntradayBars(stock.symbol, date);
+  const { data, loading, error } = useIntradayBars(stock.symbol, date, tf);
   const bars: IntradayBar[] = data?.bars ?? [];
 
   // --- Playback ----------------------------------------------------------
@@ -61,7 +75,7 @@ export function ReplayModal({ stock, onClose }: Props) {
     setPlaying(false);
     setTrades([]);
     setPosition({ qty: 0, avgCost: 0 });
-  }, [data?.date]);
+  }, [data?.date, tf]);
 
   // Drive the playhead forward at the chosen speed. Every sub-frame nudges
   // formingProgress; on the final sub-frame the bar is committed to playhead
@@ -362,10 +376,28 @@ export function ReplayModal({ stock, onClose }: Props) {
             <span className="font-mono text-text-s text-sm">{stock.symbol}</span>
             <h2 className="text-xl font-bold text-text-p">{stock.name}</h2>
             <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold">
-              覆盤 · 1分鐘
+              覆盤 · {INTERVALS.find((i) => i.value === tf)?.label}K
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center gap-0.5 mr-1">
+              {INTERVALS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => {
+                    setTf(value);
+                    setDate(undefined);  // reset to latest — the date list refreshes per interval
+                  }}
+                  className={`px-2 py-0.5 text-xs rounded font-mono transition-colors ${
+                    tf === value
+                      ? 'bg-accent/25 text-accent border border-accent/60 font-bold'
+                      : 'border border-border-c text-text-s hover:text-text-p'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <select
               value={date ?? data?.date ?? ''}
               onChange={(e) => setDate(e.target.value || undefined)}

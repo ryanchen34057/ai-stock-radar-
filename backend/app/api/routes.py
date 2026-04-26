@@ -319,14 +319,18 @@ def get_klines(symbol: str, days: int = Query(default=1300, ge=1, le=1300)):
 def get_stock_intraday(
     symbol: str,
     date: str | None = Query(default=None, description="YYYY-MM-DD; omit for latest"),
+    interval: str = Query(default="1m", description="1m / 5m / 15m / 30m / 60m"),
 ):
-    """Return one trading day's worth of 1-minute bars for the symbol.
+    """Return one trading day's bars for the symbol at the given interval.
 
-    Source: yfinance's free 1m endpoint (last ~7 trading days). Each
-    (symbol, date) bundle is cached after the first fetch so the replay
-    UI can scrub / restart without re-hitting yfinance.
+    Source: yfinance free intraday endpoints. Each (symbol, date, interval)
+    bundle is cached after the first fetch so the replay UI can scrub /
+    restart / switch interval without re-hitting yfinance.
     """
     from app.services import intraday_service
+
+    if interval not in intraday_service.SUPPORTED_INTERVALS:
+        raise HTTPException(status_code=400, detail=f"unsupported interval {interval}")
 
     conn = get_connection()
     try:
@@ -338,17 +342,23 @@ def get_stock_intraday(
     market = (row["market"] if row else "TW") or "TW"
 
     try:
-        return intraday_service.get_intraday_bars(symbol, market, date)
+        return intraday_service.get_intraday_bars(symbol, market, date, interval)
     except Exception as e:
-        logger.error(f"intraday {symbol} {date}: {e}")
+        logger.error(f"intraday {symbol} {date} {interval}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/stocks/{symbol}/intraday/dates")
-def get_stock_intraday_dates(symbol: str):
-    """List up to 14 recent trading dates that have / will have intraday data
-    available (yfinance keeps ~7 days; cached older ones included)."""
+def get_stock_intraday_dates(
+    symbol: str,
+    interval: str = Query(default="1m", description="1m / 5m / 15m / 30m / 60m"),
+):
+    """List up to 14 recent trading dates with data at this interval
+    (yfinance keeps 7d for 1m, 60d for the rest; cache merged in)."""
     from app.services import intraday_service
+
+    if interval not in intraday_service.SUPPORTED_INTERVALS:
+        raise HTTPException(status_code=400, detail=f"unsupported interval {interval}")
 
     conn = get_connection()
     try:
@@ -360,9 +370,9 @@ def get_stock_intraday_dates(symbol: str):
     market = (row["market"] if row else "TW") or "TW"
 
     try:
-        return {"dates": intraday_service.list_available_dates(symbol, market)}
+        return {"dates": intraday_service.list_available_dates(symbol, market, interval)}
     except Exception as e:
-        logger.error(f"intraday dates {symbol}: {e}")
+        logger.error(f"intraday dates {symbol} {interval}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

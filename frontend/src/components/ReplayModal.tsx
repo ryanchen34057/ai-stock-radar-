@@ -367,18 +367,23 @@ export function ReplayModal({ stock, onClose }: Props) {
     // the chart auto-scrolls. Until the playhead has produced enough
     // bars to fill the lookback share, the window stays anchored at
     // bar 0 (so bars still fill in left-to-right during the early game).
-    // The window keeps its width even past the data end — empty slots
-    // just render as blank space, which is fine.
-    const lookback = Math.floor(WINDOW_BARS * 0.7);
-    const from = Math.max(0, playhead - lookback);
-    const to   = from + WINDOW_BARS - 1;
+    //
+    // Using a FRACTIONAL playhead (playhead + formingProgress) for the
+    // window position lets the chart scroll in sub-pixel increments per
+    // sub-frame instead of jumping a whole candle width every time the
+    // integer playhead advances. The window keeps its width even past
+    // the data end — empty slots just render as blank space.
+    const lookback = WINDOW_BARS * 0.7;
+    const playheadFrac = Math.min(playhead + formingProgress, bars.length);
+    const from = Math.max(0, playheadFrac - lookback);
+    const to   = from + WINDOW_BARS;
     try {
       chart.timeScale().setVisibleLogicalRange({
         from: from as never,
-        to:   (to + 1) as never,    // half-open at the right
+        to:   to as never,
       });
     } catch { /* harmless if range can't be set this frame */ }
-  }, [bars, playhead, formingBar, stock.market]);
+  }, [bars, playhead, formingBar, formingProgress, stock.market]);
 
   // --- Simulated trading -------------------------------------------------
   const [orderQty, setOrderQty] = useState(1);

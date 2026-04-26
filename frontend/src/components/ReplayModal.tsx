@@ -49,40 +49,70 @@ export function ReplayModal({ stock, onClose }: Props) {
   const tickRef = useRef<number | null>(null);
 
   // Reset playback when bars change (new day picked).
+  // The most-recent bar animates toward its full OHLC over the slot's
+  // duration to mimic real-time tick formation — split each minute into
+  // SUBFRAMES sub-frames and interpolate.
+  const SUBFRAMES = 12;
+  const [formingProgress, setFormingProgress] = useState(0);
+
   useEffect(() => {
     setPlayhead(0);
+    setFormingProgress(0);
     setPlaying(false);
     setTrades([]);
     setPosition({ qty: 0, avgCost: 0 });
   }, [data?.date]);
 
-  // Drive the playhead forward at the chosen speed.
+  // Drive the playhead forward at the chosen speed. Every sub-frame nudges
+  // formingProgress; on the final sub-frame the bar is committed to playhead
+  // and progress resets.
   useEffect(() => {
     if (!playing || bars.length === 0) return;
-    const intervalMs = REAL_MS_PER_BAR / speed;
+    const intervalMs = REAL_MS_PER_BAR / speed;     // ms of real time per bar
+    const frameMs = Math.max(16, intervalMs / SUBFRAMES);
+
     const id = window.setInterval(() => {
-      setPlayhead((p) => {
-        const next = p + 1;
-        if (next >= bars.length) {
-          setPlaying(false);
-          return bars.length;
+      setFormingProgress((p) => {
+        const next = p + 1 / SUBFRAMES;
+        if (next >= 1) {
+          // Commit current forming bar -> closed; advance playhead.
+          setPlayhead((ph) => {
+            const advance = ph + 1;
+            if (advance >= bars.length) {
+              setPlaying(false);
+              return bars.length;
+            }
+            return advance;
+          });
+          return 0;
         }
         return next;
       });
-    }, intervalMs);
+    }, frameMs);
     tickRef.current = id;
     return () => { if (tickRef.current) window.clearInterval(tickRef.current); };
   }, [playing, speed, bars.length]);
 
   // Visible bars = first `playhead` bars (playhead=0 shows nothing yet).
+  // These are the FULLY CLOSED bars; the active forming bar is bars[playhead].
   const visibleBars = useMemo(() => bars.slice(0, playhead), [bars, playhead]);
-  const currentBar: IntradayBar | null =
-    playhead > 0 && playhead <= bars.length ? bars[playhead - 1] : null;
 
   // --- Chart -------------------------------------------------------------
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const candleSeriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addCandlestickSeries']> | null>(null);
   const volumeSeriesRef = useRef<ReturnType<ReturnType<typeof createChart>['addHistogramSeries']> | null>(null);
+
+  /** Parse 'YYYY-MM-DDTHH:MM:SS' as if it were already UTC and return Unix
+   *  seconds. lightweight-charts renders timestamps in UTC, so emitting the
+   *  exchange-local time as UTC seconds makes the x-axis show 09:00 / 13:30
+   *  exactly as users expect on a TW chart. */
+  const toUtcSeconds = (timeStr: string): number => {
+    const [d, t] = timeStr.split('T');
+    const [y, mo, da] = d.split('-').map(Number);
+    const [h, mi, s] = (t || '0:0:0').split(':').map(Number);
+    return Date.UTC(y, mo - 1, da, h, mi, s || 0) / 1000;
+  };
 
   // Build the chart once per (stock, date) — colour scheme follows the
   // market convention used elsewhere (TW = red-up, US = green-up).
@@ -103,6 +133,7 @@ export function ReplayModal({ stock, onClose }: Props) {
       rightPriceScale: { borderColor: '#30363D', scaleMargins: { top: 0.05, bottom: 0.30 } },
       crosshair: { mode: 1 },
     });
+    chartRef.current = chart;
 
     const up   = stock.market === 'US' ? '#00C851' : '#FF3B3B';
     const down = stock.market === 'US' ? '#FF3B3B' : '#00C851';
@@ -125,28 +156,118 @@ export function ReplayModal({ stock, onClose }: Props) {
     return () => chart.remove();
   }, [stock.symbol, stock.market, data?.date]);
 
-  // Push the visible-bar slice into the chart whenever the playhead moves.
+  // When a new day's bars arrive, lock the chart's visible time range to the
+  // FULL session (e.g. 09:00 -> 13:30 for TW) and seed the price scale with
+  // the day's high/low. This way bars fill in left-to-right as the playhead
+  // advances instead of crowding to the right edge.
+  useEffect(() => {
+    const candle = candleSeriesRef.current;
+    const vol = volumeSeriesRef.current;
+    const chart = chartRef.current;
+    if (!candle || !vol || !chart || bars.length === 0) return;
+
+    candle.setData([]);
+    vol.setData([]);
+
+    const fromT = toUtcSeconds(bars[0].time);
+    const toT   = toUtcSeconds(bars[bars.length - 1].time);
+    chart.timeScale().setVisibleRange({ from: fromT as never, to: toT as never });
+
+    // Lock the price scale around the day's actual extremes so the empty
+    // chart still shows realistic price levels (helps the user orient
+    // before the first candle prints).
+    const dayHigh = Math.max(...bars.map((b) => b.high));
+    const dayLow  = Math.min(...bars.map((b) => b.low));
+    const pad = (dayHigh - dayLow) * 0.05;
+    candle.applyOptions({ autoscaleInfoProvider: () => ({
+      priceRange: { minValue: dayLow - pad, maxValue: dayHigh + pad },
+    })});
+  }, [bars]);
+
+  // The "current" bar visible to the user — the forming one when there is
+  // one, else the most-recently-closed bar (when playhead reached the end).
+  // Used by the quote header, the simulated-trade entry price, and live P&L.
+  // Forming bar = bars[playhead] interpolated by formingProgress.
+  // - Closed bars: bars[0 .. playhead-1] use their real OHLC.
+  // - Forming bar: open is fixed, close/high/low expand from open toward
+  //   their final values as progress 0->1 (mimics real-time tick formation).
+  const formingBar: IntradayBar | null = useMemo(() => {
+    if (playhead >= bars.length) return null;
+    const b = bars[playhead];
+    if (!b) return null;
+    const p = Math.min(1, Math.max(0, formingProgress));
+    const close = b.open + (b.close - b.open) * p;
+    const high  = b.open + (b.high  - b.open) * p;
+    const low   = b.open + (b.low   - b.open) * p;
+    return {
+      time: b.time,
+      open: b.open,
+      high: Math.max(b.open, close, high),
+      low:  Math.min(b.open, close, low),
+      close,
+      volume: Math.round(b.volume * p),
+    };
+  }, [bars, playhead, formingProgress]);
+
+  const currentBar: IntradayBar | null = formingBar
+    ?? (playhead > 0 ? bars[playhead - 1] : null);
+
+  // Push closed bars + the forming bar into the chart.
+  const lastClosedCountRef = useRef<number>(0);
   useEffect(() => {
     const candle = candleSeriesRef.current;
     const vol = volumeSeriesRef.current;
     if (!candle || !vol) return;
-    if (visibleBars.length === 0) {
+
+    const upVol   = stock.market === 'US' ? 'rgba(0,200,81,0.5)'  : 'rgba(255,59,59,0.5)';
+    const downVol = stock.market === 'US' ? 'rgba(255,59,59,0.5)' : 'rgba(0,200,81,0.5)';
+
+    const closed = visibleBars; // first `playhead` bars are fully closed
+    const prevClosed = lastClosedCountRef.current;
+
+    if (closed.length === 0 && prevClosed > 0) {
+      // Reset
       candle.setData([]);
       vol.setData([]);
-      return;
+    } else if (closed.length === prevClosed + 1) {
+      // Single new closed bar appended (forming bar just committed) — push
+      // its FINAL OHLC in place via update().
+      const b = closed[closed.length - 1];
+      const t = toUtcSeconds(b.time);
+      candle.update({ time: t as never, open: b.open, high: b.high, low: b.low, close: b.close });
+      vol.update({ time: t as never, value: b.volume, color: b.close >= b.open ? upVol : downVol });
+    } else if (closed.length !== prevClosed) {
+      // Scrub jump — re-seed all closed bars from scratch.
+      candle.setData(closed.map((b) => ({
+        time: toUtcSeconds(b.time) as never,
+        open: b.open, high: b.high, low: b.low, close: b.close,
+      })));
+      vol.setData(closed.map((b) => ({
+        time: toUtcSeconds(b.time) as never,
+        value: b.volume,
+        color: b.close >= b.open ? upVol : downVol,
+      })));
     }
-    const up   = stock.market === 'US' ? 'rgba(0,200,81,0.5)'  : 'rgba(255,59,59,0.5)';
-    const down = stock.market === 'US' ? 'rgba(255,59,59,0.5)' : 'rgba(0,200,81,0.5)';
-    candle.setData(visibleBars.map((b) => ({
-      time: (Date.parse(b.time) / 1000) as never,
-      open: b.open, high: b.high, low: b.low, close: b.close,
-    })));
-    vol.setData(visibleBars.map((b) => ({
-      time: (Date.parse(b.time) / 1000) as never,
-      value: b.volume,
-      color: b.close >= b.open ? up : down,
-    })));
-  }, [visibleBars, stock.market]);
+    // (closed.length === prevClosed && both > 0) is the common forming-frame
+    // case — closed bars unchanged, only the forming bar below needs an update.
+    lastClosedCountRef.current = closed.length;
+
+    // Forming bar — overwrite each frame via update() so the latest candle
+    // visually grows / shrinks like a live tick.
+    if (formingBar) {
+      const t = toUtcSeconds(formingBar.time);
+      candle.update({
+        time: t as never,
+        open: formingBar.open, high: formingBar.high,
+        low: formingBar.low, close: formingBar.close,
+      });
+      vol.update({
+        time: t as never,
+        value: formingBar.volume,
+        color: formingBar.close >= formingBar.open ? upVol : downVol,
+      });
+    }
+  }, [visibleBars, formingBar, stock.market]);
 
   // --- Simulated trading -------------------------------------------------
   const [orderQty, setOrderQty] = useState(1);
@@ -196,7 +317,7 @@ export function ReplayModal({ stock, onClose }: Props) {
     return val >= 0 ? pos : neg;
   };
 
-  const reset = () => { setPlayhead(0); setPlaying(false); };
+  const reset = () => { setPlayhead(0); setFormingProgress(0); setPlaying(false); };
 
   // ESC closes
   useEffect(() => {
@@ -334,7 +455,11 @@ export function ReplayModal({ stock, onClose }: Props) {
                 min={0}
                 max={bars.length}
                 value={playhead}
-                onChange={(e) => { setPlaying(false); setPlayhead(Number(e.target.value)); }}
+                onChange={(e) => {
+                  setPlaying(false);
+                  setPlayhead(Number(e.target.value));
+                  setFormingProgress(0);
+                }}
                 disabled={bars.length === 0}
                 className="flex-1 min-w-[120px] accent-accent"
               />

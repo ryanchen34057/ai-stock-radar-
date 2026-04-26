@@ -69,20 +69,54 @@ export function ReplayModal({ stock, onClose }: Props) {
   const [speed, setSpeed] = useState<Speed>(10);
   const tickRef = useRef<number | null>(null);
 
-  // Reset playback when bars change (new day picked).
   // The most-recent bar animates toward its full OHLC over the slot's
   // duration to mimic real-time tick formation — split each minute into
   // SUBFRAMES sub-frames and interpolate.
   const SUBFRAMES = 12;
   const [formingProgress, setFormingProgress] = useState(0);
 
+  // Track the real-world time the playhead is currently at, so when the
+  // bar set changes (interval switch) we can re-anchor the playhead to
+  // the equivalent point in the new bar array instead of resetting.
+  const playheadTimeRef = useRef<string | null>(null);
   useEffect(() => {
-    setPlayhead(0);
-    setFormingProgress(0);
-    setPlaying(false);
+    if (playhead > 0 && bars[playhead - 1]) {
+      playheadTimeRef.current = bars[playhead - 1].time;
+    } else if (playhead === 0) {
+      playheadTimeRef.current = null;
+    }
+  }, [playhead, bars]);
+
+  // Date change is a real reset — clear trades/position and forget the
+  // previous playback time. Interval (tf) change is NOT, so this effect
+  // intentionally only watches the date.
+  useEffect(() => {
     setTrades([]);
     setPosition({ qty: 0, avgCost: 0 });
-  }, [data?.date, tf]);
+    playheadTimeRef.current = null;
+  }, [data?.date]);
+
+  // When new bar data arrives (date OR interval change), re-anchor the
+  // playhead to whatever bar covers our remembered playback time. If
+  // there's no remembered time (fresh load / explicit reset), start
+  // from 0. Either way, pause and clear the forming animation so the
+  // user controls when playback resumes.
+  useEffect(() => {
+    if (!data?.bars) return;
+    const t = playheadTimeRef.current;
+    if (t == null) {
+      setPlayhead(0);
+    } else {
+      let p = 0;
+      for (let i = 0; i < data.bars.length; i++) {
+        if (data.bars[i].time <= t) p = i + 1;
+        else break;
+      }
+      setPlayhead(Math.min(p, data.bars.length));
+    }
+    setFormingProgress(0);
+    setPlaying(false);
+  }, [data]);
 
   // Drive the playhead forward at the chosen speed. Every sub-frame nudges
   // formingProgress; on the final sub-frame the bar is committed to playhead
@@ -395,10 +429,7 @@ export function ReplayModal({ stock, onClose }: Props) {
               {INTERVALS.map(({ value, label }) => (
                 <button
                   key={value}
-                  onClick={() => {
-                    setTf(value);
-                    setDate(undefined);  // reset to latest — the date list refreshes per interval
-                  }}
+                  onClick={() => setTf(value)}
                   className={`px-2 py-0.5 text-xs rounded font-mono transition-colors ${
                     tf === value
                       ? 'bg-accent/25 text-accent border border-accent/60 font-bold'

@@ -41,11 +41,11 @@ const INTERVALS: { value: IntradayInterval; label: string }[] = [
 const REAL_MS_PER_BAR = 60_000;
 
 // How many bars to keep visible at once. Smaller = wider candles + less
-// historic context. ~80 gives roughly 12px per bar on a typical desktop
-// chart width, which reads as comfortably distinct candles rather than
-// the thin pixel-strips you get when the whole session is forced into
-// the viewport.
-const WINDOW_BARS = 80;
+// historic context. 40 gives roughly 25px per bar on a typical desktop
+// chart width — comfortably distinct candles, including for short-data
+// timeframes (e.g. a 5m TW session is only ~54 bars) where 80 bars made
+// the played handful look like a dot in the corner.
+const WINDOW_BARS = 40;
 
 interface SimTrade {
   bar: number;
@@ -365,18 +365,16 @@ export function ReplayModal({ stock, onClose }: Props) {
     // Sliding window — keep ~70% historic context to the left of the
     // playhead and ~30% future runway to the right, so as bars play in
     // the chart auto-scrolls. Until the playhead has produced enough
-    // bars to fill that historic share, anchor the window to bar 0.
+    // bars to fill the lookback share, the window stays anchored at
+    // bar 0 (so bars still fill in left-to-right during the early game).
+    // The window keeps its width even past the data end — empty slots
+    // just render as blank space, which is fine.
     const lookback = Math.floor(WINDOW_BARS * 0.7);
-    const lookahead = WINDOW_BARS - lookback;
     const from = Math.max(0, playhead - lookback);
-    const to   = Math.min(bars.length - 1, from + WINDOW_BARS - 1);
-    // Recompute `from` if `to` was clamped, so the window keeps its size
-    // even at the right edge of the day.
-    const fromAdj = Math.max(0, to - WINDOW_BARS + 1);
-    void lookahead;   // documented above; not used after `to` clamp
+    const to   = from + WINDOW_BARS - 1;
     try {
       chart.timeScale().setVisibleLogicalRange({
-        from: fromAdj as never,
+        from: from as never,
         to:   (to + 1) as never,    // half-open at the right
       });
     } catch { /* harmless if range can't be set this frame */ }

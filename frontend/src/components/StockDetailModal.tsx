@@ -82,14 +82,37 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
       });
   }, [stock.symbol, stock.klines]);
 
-  // Close on Escape
+  // Close on Escape; ←/→ steps through the filtered list (in the same order
+  // shown on the dashboard).
+  const visibleSymbols = useDashboardStore((s) => s.visibleSymbols);
+  const stocks = useDashboardStore((s) => s.stocks);
+  const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      // Don't hijack arrows while user is typing in an input/textarea/select
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (visibleSymbols.length === 0) return;
+
+      const idx = visibleSymbols.indexOf(stock.symbol);
+      if (idx < 0) return;
+      const nextIdx = e.key === 'ArrowRight'
+        ? (idx + 1) % visibleSymbols.length
+        : (idx - 1 + visibleSymbols.length) % visibleSymbols.length;
+      const nextSym = visibleSymbols[nextIdx];
+      const next = stocks.find((s) => s.symbol === nextSym);
+      if (next) {
+        e.preventDefault();
+        setSelectedStock(next);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [onClose, stock.symbol, visibleSymbols, stocks, setSelectedStock]);
 
   // Build chart whenever klines or range changes
   useEffect(() => {
@@ -340,13 +363,56 @@ export function StockDetailModal({ stock, selectedMA, onClose }: Props) {
               </span>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="text-text-s hover:text-text-p text-xl w-8 h-8 flex items-center justify-center
-                       rounded hover:bg-card-bg transition-colors"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1">
+            {(() => {
+              const idx = visibleSymbols.indexOf(stock.symbol);
+              const total = visibleSymbols.length;
+              const hasNav = idx >= 0 && total > 1;
+              const goto = (delta: number) => {
+                if (!hasNav) return;
+                const nextIdx = (idx + delta + total) % total;
+                const next = stocks.find((s) => s.symbol === visibleSymbols[nextIdx]);
+                if (next) setSelectedStock(next);
+              };
+              return (
+                <>
+                  {hasNav && (
+                    <span className="text-[11px] text-text-t font-mono mr-2 hidden sm:inline">
+                      {idx + 1} / {total} · ←/→ 切換
+                    </span>
+                  )}
+                  <button
+                    onClick={() => goto(-1)}
+                    disabled={!hasNav}
+                    title="上一檔 (←)"
+                    className="text-text-s hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed
+                               text-base w-8 h-8 flex items-center justify-center
+                               rounded hover:bg-card-bg transition-colors"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    onClick={() => goto(1)}
+                    disabled={!hasNav}
+                    title="下一檔 (→)"
+                    className="text-text-s hover:text-accent disabled:opacity-30 disabled:cursor-not-allowed
+                               text-base w-8 h-8 flex items-center justify-center
+                               rounded hover:bg-card-bg transition-colors"
+                  >
+                    ›
+                  </button>
+                </>
+              );
+            })()}
+            <button
+              onClick={onClose}
+              title="關閉 (Esc)"
+              className="text-text-s hover:text-text-p text-xl w-8 h-8 flex items-center justify-center
+                         rounded hover:bg-card-bg transition-colors"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Price section */}

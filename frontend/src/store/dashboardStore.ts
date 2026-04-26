@@ -42,6 +42,10 @@ interface DashboardState {
   // off, BB overlay is hidden entirely. Default all on.
   bbVisible: { upper: boolean; middle: boolean; lower: boolean };
   selectedStock: StockData | null;
+  /** Symbols of every stock currently rendered in the grid, in the exact
+   *  visual order (theme -> layer -> sub-category -> market-cap). Populated
+   *  by StockGrid; consumed by StockDetailModal's left/right arrow nav. */
+  visibleSymbols: string[];
 
   // Actions
   setMarket: (market: Market) => void;
@@ -74,6 +78,7 @@ interface DashboardState {
   setAllMAVisible: (on: boolean) => void;
   toggleBBVisible: (k: 'upper' | 'middle' | 'lower') => void;
   setSelectedStock: (stock: StockData | null) => void;
+  setVisibleSymbols: (symbols: string[]) => void;
 }
 
 const DEFAULT_SPECIAL: SpecialFilters = {
@@ -141,6 +146,7 @@ export const useDashboardStore = create<DashboardState>((set) => ({
   maVisible: { 5: true, 10: true, 20: true, 60: true, 120: true, 240: true },
   bbVisible: { upper: true, middle: true, lower: true },
   selectedStock: null,
+  visibleSymbols: [],
 
   setMarket: (market) =>
     // Reset themeFilter too — its valid values differ per market (TW uses
@@ -193,4 +199,5 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       return { darkMode: next };
     }),
   setSelectedStock: (selectedStock) => set({ selectedStock }),
+  setVisibleSymbols: (visibleSymbols) => set({ visibleSymbols }),
 }));

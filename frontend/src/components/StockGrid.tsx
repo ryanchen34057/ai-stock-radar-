@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { StockData, MAPeriod, AlertFilter, SortBy, MAProximityFilter, BreakoutPendingFilter, BreakoutVolumeFilter, BBUpperCrossFilter, BBProximityFilter, BBSqueezeFilter, BowlPatternFilter, CandleFilter, SpecialFilters, InstiFilters, RangeFilter, KDFilters, ThemeFilter, TierFilter } from '../types/stock';
 import { layerShortCode, LAYER_THEME, THEME_LABELS } from '../types/stock';
 import { StockCard } from './StockCard';
@@ -42,6 +42,7 @@ export function StockGrid({
   themeFilter, tierFilter, searchQuery, selectedLayers, sortBy,
 }: Props) {
   const setSelectedStock = useDashboardStore((s) => s.setSelectedStock);
+  const setVisibleSymbols = useDashboardStore((s) => s.setVisibleSymbols);
   const market = useDashboardStore((s) => s.market);
   const { data: insti } = useInstitutional();
 
@@ -483,6 +484,19 @@ export function StockGrid({
         return to !== 0 ? to : a.layer - b.layer;
       });
   }, [filtered]);
+
+  // Publish the visible-symbol order so the detail modal's ←/→ arrow keys
+  // can walk the same list the user is seeing on screen. Order = theme ->
+  // layer -> sub_category alpha -> market_cap desc (matches `grouped`).
+  useEffect(() => {
+    const ordered: string[] = [];
+    for (const g of grouped) {
+      for (const sub of g.subs) {
+        for (const s of sub.stocks) ordered.push(s.symbol);
+      }
+    }
+    setVisibleSymbols(ordered);
+  }, [grouped, setVisibleSymbols]);
 
   if (filtered.length === 0) {
     return (

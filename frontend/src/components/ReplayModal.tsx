@@ -244,19 +244,50 @@ export function ReplayModal({ stock, onClose }: Props) {
 
   // The "current" bar visible to the user — the forming one when there is
   // one, else the most-recently-closed bar (when playhead reached the end).
-  // Used by the quote header, the simulated-trade entry price, and live P&L.
-  // Forming bar = bars[playhead] interpolated by formingProgress.
-  // - Closed bars: bars[0 .. playhead-1] use their real OHLC.
-  // - Forming bar: open is fixed, close/high/low expand from open toward
-  //   their final values as progress 0->1 (mimics real-time tick formation).
+  //
+  // Forming bar = bars[playhead] simulated as a 3-phase price walk over
+  // formingProgress 0→1. Linear-interpolating high/low/close in lockstep
+  // (the previous approach) made both wicks grow symmetrically, which
+  // doesn't happen in real markets — at any moment the price is at one
+  // place, so it can only be extending the high OR the low at a time.
+  //
+  // Up-bar  (close ≥ open): open → high → low → close
+  // Down-bar(close <  open): open → low  → high → close
+  //
+  // Phase 1 (0..33%) extends close to one extreme; phase 2 (33..66%)
+  // walks across to the other extreme; phase 3 (66..100%) settles to
+  // the final close. Both extremes are anchored from the start of the
+  // phase that establishes them, so neither wick "shrinks back".
   const formingBar: IntradayBar | null = useMemo(() => {
     if (playhead >= bars.length) return null;
     const b = bars[playhead];
     if (!b) return null;
     const p = Math.min(1, Math.max(0, formingProgress));
-    const close = b.open + (b.close - b.open) * p;
-    const high  = b.open + (b.high  - b.open) * p;
-    const low   = b.open + (b.low   - b.open) * p;
+
+    const isUp = b.close >= b.open;
+    const firstExtreme  = isUp ? b.high : b.low;
+    const secondExtreme = isUp ? b.low  : b.high;
+
+    let close: number;
+    let high = b.open;
+    let low  = b.open;
+
+    if (p < 0.33) {
+      const t = p / 0.33;
+      close = b.open + (firstExtreme - b.open) * t;
+      if (isUp) high = close; else low = close;
+    } else if (p < 0.66) {
+      const t = (p - 0.33) / 0.33;
+      close = firstExtreme + (secondExtreme - firstExtreme) * t;
+      if (isUp) { high = b.high; low  = close; }
+      else      { low  = b.low;  high = close; }
+    } else {
+      const t = (p - 0.66) / 0.34;
+      close = secondExtreme + (b.close - secondExtreme) * t;
+      high = b.high;
+      low  = b.low;
+    }
+
     return {
       time: b.time,
       open: b.open,

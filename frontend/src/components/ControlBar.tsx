@@ -10,16 +10,18 @@ import { layerShortCode } from '../types/stock';
 const MA_OPTIONS: MAPeriod[] = [5, 10, 20, 60, 120, 240];
 
 function FilterPill({
-  active, onClick, children, activeClass = 'bg-accent/20 text-accent border-accent',
+  active, onClick, children, activeClass = 'bg-accent/20 text-accent border-accent', title,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
   activeClass?: string;
+  title?: string;
 }) {
   return (
     <button
       onClick={onClick}
+      title={title}
       className={`px-2 py-0.5 text-xs rounded border transition-colors select-none
         ${active ? activeClass : 'border-white/20 bg-white/10 text-white hover:bg-white/20 hover:border-white/40'}`}
     >
@@ -831,6 +833,11 @@ export function ControlBar() {
         <FilterPill active={specialFilters.longBullish} onClick={() => toggleSF('longBullish')}
           activeClass="bg-tw-down/25 text-tw-down border-tw-down/60">
           長紅 K (漲&gt;4%·實體&gt;⅔)
+        </FilterPill>
+        <FilterPill active={specialFilters.lowHammer} onClick={() => toggleSF('lowHammer')}
+          activeClass="bg-tw-down/20 text-tw-down border-tw-down/50"
+          title="低檔槌子：下影線 ≥ 2× 實體 + 上影極小 + 今日創 10 日新低，暗示打底反轉">
+          低檔槌子 🔨
         </FilterPill>
         <FilterPill active={specialFilters.gapUp} onClick={() => toggleSF('gapUp')}
           activeClass="bg-tw-down/20 text-tw-down border-tw-down/50">

@@ -247,6 +247,7 @@ export interface SpecialFilters {
   bigHolderIncrease: boolean;  // TDCC 千張大戶 count_change_pct > 0 week-over-week
   bbExpansion: boolean;        // 布林通道剛打開: squeeze-low 在最近 15 日內, 現 BBW ≥ squeeze × 1.3 且正在擴張
   longBullish: boolean;        // 長紅: close>open, 漲幅>4%, 實體 > 2/3 當日 K 棒
+  lowHammer: boolean;          // 低檔槌子: hammer K 棒 (下影 ≥ 2× 實體, 上影極小) 出現在 10 日新低附近, 暗示反轉
 }
 
 export interface RangeFilter {

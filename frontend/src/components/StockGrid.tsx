@@ -245,6 +245,33 @@ export function StockGrid({
       });
     }
 
+    // 低檔槌子 — hammer at the bottom of a pullback. Classic reversal:
+    //   1. Hammer shape: lower-shadow ≥ 2× body, upper-shadow ≤ 0.3× body
+    //   2. Body非極小: |close-open| ≥ 0.1% of close (filter doji/near-flat)
+    //   3. 在低檔: today's low ≤ min(low) of past 10 trading days
+    //      (今天創 10 日新低再強力反彈才算「低檔槌子」)
+    if (sf.lowHammer) {
+      result = result.filter((s) => {
+        const k = s.klines;
+        if (k.length < 11) return false;
+        const t = k[k.length - 1];
+        const body  = Math.abs(t.close - t.open);
+        const range = t.high - t.low;
+        if (range <= 0 || t.close <= 0) return false;
+        // Skip near-doji bars where the "hammer" shape is mostly noise
+        if (body / t.close < 0.001) return false;
+        const lower = Math.min(t.open, t.close) - t.low;
+        const upper = t.high - Math.max(t.open, t.close);
+        // Hammer geometry — long lower wick, tiny upper wick
+        if (lower < 2 * body) return false;
+        if (upper > 0.3 * body) return false;
+        // Low position — today's low is the lowest of the past 10 bars
+        const lows10 = k.slice(-11, -1).map((b) => b.low);
+        const min10  = Math.min(...lows10);
+        return t.low <= min10;
+      });
+    }
+
     // 長紅 — 今日收盤為長紅 K 棒:
     //   1. close > open (紅 K)
     //   2. 漲幅 > 4% vs 昨日收盤

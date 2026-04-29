@@ -38,13 +38,17 @@ export function MiniKlineChart({ klines, selectedMA, market }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
 
-  // IntersectionObserver for lazy rendering
+  // IntersectionObserver — mount AND unmount the chart based on viewport
+  // visibility. With 1000+ cards on the page, leaving every chart mounted
+  // (the previous one-shot behavior) burns hundreds of MB of GPU/canvas
+  // state and freezes the browser. The 300px rootMargin gives enough
+  // hysteresis that a normal scroll doesn't thrash mount/unmount.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setIsVisible(true); },
-      { threshold: 0.1, rootMargin: '200px' }
+      ([entry]) => setIsVisible(entry.isIntersecting),
+      { threshold: 0, rootMargin: '300px' }
     );
     observer.observe(el);
     return () => observer.disconnect();

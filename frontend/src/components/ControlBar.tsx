@@ -221,6 +221,7 @@ export function ControlBar() {
           { val: 'A',     label: 'AI 產業鏈',     icon: '🎯' },
           { val: 'B',     label: '電動車',        icon: '🚗' },
           { val: 'C',     label: '機器人',        icon: '🤖' },
+          { val: 'D',     label: '全市場',        icon: '🌐' },
           { val: 'cross', label: '跨主題精選',    icon: '⭐' },
         ];
 

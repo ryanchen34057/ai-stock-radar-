@@ -496,8 +496,8 @@ export function StockGrid({
         });
       }
     }
-    // Layer ordering: theme A first (1-10, 16-19, 25-26), then B (11-15), then C (21-24).
-    const themeOrder: Record<string, number> = { A: 0, B: 1, C: 2 };
+    // Layer ordering: A first, then B, C, then D (全市場 dump goes last).
+    const themeOrder: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
     return Array.from(byLayer.entries())
       .map(([layer, r]) => ({
         layer, layer_name: r.name, theme: r.theme,

@@ -82,7 +82,7 @@ export interface StockData {
 
 export type ThemeFilter =
   // Taiwan themes
-  | 'A' | 'B' | 'C'
+  | 'A' | 'B' | 'C' | 'D'
   // US GICS 11 sectors
   | 'IT' | 'HC' | 'FN' | 'CD' | 'CS' | 'CM' | 'IN' | 'EN' | 'MT' | 'UT' | 'RE'
   // Cross-cutting
@@ -302,6 +302,7 @@ export const THEME_LABELS: Record<string, string> = {
   A: 'AI 伺服器',
   B: '電動車',
   C: '機器人',
+  D: '全市場',
   // US (GICS 11 sectors — 2-letter codes to avoid collision with A/B/C)
   IT: '資訊科技',
   HC: '醫療保健',
@@ -322,6 +323,8 @@ export const LAYER_THEME: Record<number, string> = {
   16:'A',17:'A',18:'A',19:'A',25:'A',26:'A',
   11:'B',12:'B',13:'B',14:'B',15:'B',
   21:'C',22:'C',23:'C',24:'C',
+  // Theme D — single layer for the full-market dump (sub_category = 產業別)
+  30:'D',
   // US — one layer per GICS sector (for phase 1; sub_category = yfinance industry)
   101:'IT', 102:'HC', 103:'FN', 104:'CD', 105:'CS', 106:'CM',
   107:'IN', 108:'EN', 109:'MT', 110:'UT', 111:'RE',
@@ -337,6 +340,7 @@ export function layerShortCode(layerId: number): string {
   const theme = LAYER_THEME[layerId];
   if (theme === 'B') return `B-${layerId - 10}`;
   if (theme === 'C') return `C-${layerId - 20}`;
+  if (theme === 'D') return 'D';
   return `L${LAYER_DISPLAY_NUM[layerId] ?? layerId}`;
 }
 
@@ -369,12 +373,15 @@ export const LAYER_ICONS: Record<number, string> = {
   22: '🔄',  // 伺服馬達
   23: '🤖',  // 機電整合
   24: '👁️',  // 感測末端
+  // Theme D
+  30: '🌐',  // 全市場
 };
 
 export const THEME_COLORS: Record<string, string> = {
   A: '#58A6FF', // blue
   B: '#8BC34A', // green
   C: '#E91E63', // pink
+  D: '#FFB020', // amber
 };
 
 /** Returns true if the stock belongs to this layer (primary OR secondary cross-theme layer). */

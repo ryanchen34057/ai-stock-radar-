@@ -97,6 +97,7 @@ const DEFAULT_SPECIAL: SpecialFilters = {
   bbExpansion:       false,
   longBullish:       false,
   lowHammer:         false,
+  bottomVolumeSurge: false,
 };
 
 const DEFAULT_INSTI: InstiFilters = {

@@ -840,6 +840,11 @@ export function ControlBar() {
           title="低檔槌子：下影線 ≥ 2× 實體 + 上影極小 + 今日創 10 日新低，暗示打底反轉">
           低檔槌子 🔨
         </FilterPill>
+        <FilterPill active={specialFilters.bottomVolumeSurge} onClick={() => toggleSF('bottomVolumeSurge')}
+          activeClass="bg-tw-down/20 text-tw-down border-tw-down/50"
+          title="底部爆大量：收盤距 20 日低 ≤ 5% + 量 ≥ 2× MV20 + 過去 20 日有 ≥ 8% 跌勢，暗示打底承接">
+          底部爆大量 💥
+        </FilterPill>
         <FilterPill active={specialFilters.gapUp} onClick={() => toggleSF('gapUp')}
           activeClass="bg-tw-down/20 text-tw-down border-tw-down/50">
           跳空向上 ↑

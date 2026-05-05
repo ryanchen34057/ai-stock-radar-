@@ -245,6 +245,34 @@ export function StockGrid({
       });
     }
 
+    // 底部爆大量 — accumulation signal at the bottom:
+    //   1. 在底部: today's close 距離過去 20 日低點 ≤ 5%
+    //   2. 量增: today's volume ≥ 2× MV20 (20-day average volume)
+    //   3. 過去 20 日內有跌勢: max close 至少比 today's close 高 8%
+    //      (排除盤整中量爆 — 那不算「底部爆量」)
+    if (sf.bottomVolumeSurge) {
+      result = result.filter((s) => {
+        const k = s.klines;
+        if (k.length < 21) return false;
+        const t = k[k.length - 1];
+        const past20 = k.slice(-21, -1); // 20 prior bars (exclude today)
+        const lows = past20.map((b) => b.low);
+        const closes = past20.map((b) => b.close);
+        const vols = past20.map((b) => b.volume || 0);
+        const min20 = Math.min(...lows);
+        const maxClose20 = Math.max(...closes);
+        const mv20 = vols.reduce((a, b) => a + b, 0) / 20;
+        if (mv20 <= 0 || min20 <= 0) return false;
+        // Near the 20-day low (within +5%)
+        if ((t.close - min20) / min20 > 0.05) return false;
+        // Volume surge ≥ 2× MV20
+        if ((t.volume || 0) < 2 * mv20) return false;
+        // Real prior decline — at least one bar 8%+ above today
+        if ((maxClose20 - t.close) / t.close < 0.08) return false;
+        return true;
+      });
+    }
+
     // 低檔槌子 — hammer at the bottom of a pullback. Classic reversal:
     //   1. Hammer shape: lower-shadow ≥ 2× body, upper-shadow ≤ 0.3× body
     //   2. Body非極小: |close-open| ≥ 0.1% of close (filter doji/near-flat)
